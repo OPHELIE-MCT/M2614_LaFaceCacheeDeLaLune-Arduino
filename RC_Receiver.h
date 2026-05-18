@@ -11,6 +11,10 @@ class RC_Receiver {
    public:
     RC_Receiver(const uint8_t* pins, uint8_t count);
     ~RC_Receiver();
+    /// Attach a CHANGE interrupt to every channel pin.
+    /// Call once in setup(), after calibrate().
+    void beginInterruptDriven();
+    /// Legacy polled update — harmless no-op when interrupt-driven.
     void update();
     RC_Channel* getChannel(uint8_t index) const;
     uint8_t getChannelCount() const;

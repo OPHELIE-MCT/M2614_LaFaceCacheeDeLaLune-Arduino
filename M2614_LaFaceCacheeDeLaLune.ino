@@ -68,6 +68,10 @@ void setup() {
         rcReceiver.getChannel(i)->calibrate(1000, 2000);          // TODO: add calibration procedure by asking user to move sticks to extremes
     }
 
+    // Attach edge interrupts to all RC channel pins so pulse widths are
+    // measured on transitions instead of being polled from loop().
+    rcReceiver.beginInterruptDriven();
+
     // Initialise drive system (runs motor calibration, starts control thread)
     if (!DriveSystem::init(MOTORS)) {
         Monitor.println("FATAL: Drive system init failed. Halting.");

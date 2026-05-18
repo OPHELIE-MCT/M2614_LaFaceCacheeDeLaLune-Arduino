@@ -7,6 +7,7 @@ class RC_Channel {
    public:
     RC_Channel(uint8_t pin);
     void update();
+    uint8_t getPin() const { return _pin; }
     uint16_t getPulseWidth() const;
     int16_t getMappedPulseWidth() const;
     void calibrate(uint16_t min, uint16_t max);
