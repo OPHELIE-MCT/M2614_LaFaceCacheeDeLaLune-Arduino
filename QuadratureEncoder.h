@@ -14,12 +14,12 @@ enum EncoderIndex : uint8_t { ENC_FL = 0,
 
 namespace QuadratureEncoder {
 
-/// Initialise ISRs for all four quadrature encoders.
+/// Initialise ISRs for all four encoder pulse inputs.
 /// Must be called after pinSetup().
 void begin();
 
 /// Read the accumulated pulse count for one encoder and reset it to zero.
-/// Returns a signed value: positive = forward, negative = reverse.
+/// Returns the number of detected B-channel edges since the last reset.
 /// This function is ISR-safe (disables interrupts briefly).
 int32_t readAndResetDelta(uint8_t index);
 

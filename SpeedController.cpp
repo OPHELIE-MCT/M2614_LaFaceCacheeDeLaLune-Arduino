@@ -59,10 +59,10 @@ int16_t SpeedController::update(int32_t measuredPps, float dt) {
 
     // Integral (PI and PID modes)
     if (_mode == REG_PI || _mode == REG_PID) {
-        // Reset integrator on direction change (sign of setpoint flipped)
+        // Keep the integrator continuous across target changes.
         if ((_rampedSetpoint > 0 && _prevError < 0 && error > 0) ||
             (_rampedSetpoint < 0 && _prevError > 0 && error < 0)) {
-            // Not a true direction change indicator — keep integrator
+            // No action needed here.
         }
 
         _integral += error * dt;

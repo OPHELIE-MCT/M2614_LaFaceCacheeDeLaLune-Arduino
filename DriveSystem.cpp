@@ -45,6 +45,12 @@ static unsigned long zeroSince[4] = {0, 0, 0, 0};
 static struct k_thread driveThreadData;
 static k_thread_stack_t* driveThreadStack = nullptr;
 
+static int8_t signOf(int32_t value) {
+    if (value > 0) return 1;
+    if (value < 0) return -1;
+    return 0;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  Low-level motor control (same as MotorCalibration)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -144,17 +150,23 @@ static void controlThread(void*, void*, void*) {
         // Read encoders and compute PPS
         for (uint8_t i = 0; i < 4; i++) {
             int32_t delta = QuadratureEncoder::readAndResetDelta(i);
-            // Convert delta pulses over CONTROL_PERIOD_MS to pps
+            // Convert delta pulses over CONTROL_PERIOD_MS to absolute pps.
             int32_t measuredPps = (int32_t)((int64_t)delta * 1000 / (int64_t)CONTROL_PERIOD_MS);
 
             // Load the latest target
             noInterrupts();
             int32_t target = wheelTargetPps[i];
             interrupts();
-            controllers[i].setTarget(target);
+            controllers[i].setTarget(abs(target));
 
-            // Run PID
-            int16_t pwm = controllers[i].update(measuredPps, dt);
+            // Run the controller on speed magnitude only, then restore the
+            // requested wheel direction for the motor command.
+            int16_t pwmMagnitude = controllers[i].update(measuredPps, dt);
+            int8_t directionRef = signOf(target);
+            if (directionRef == 0) {
+                directionRef = signOf(appliedPwm[i]);
+            }
+            int16_t pwm = (int16_t)(pwmMagnitude * directionRef);
 
             // Apply with direction-change safety
             applyMotorWithSafety(i, pwm);
@@ -173,7 +185,7 @@ namespace DriveSystem {
 bool init(const MotorPins motors[4]) {
     _motors = motors;
 
-    // Initialise quadrature encoders
+    // Initialise encoder pulse counting
     QuadratureEncoder::begin();
 
     // Run motor calibration
@@ -201,9 +213,7 @@ bool init(const MotorPins motors[4]) {
     lastCommandTime = millis();
     running = true;
 
-    k_thread_create(&driveThreadData, driveThreadStack, DRIVE_THREAD_STACK_SIZE,
-                    controlThread, nullptr, nullptr, nullptr,
-                    DRIVE_THREAD_PRIORITY, 0, K_NO_WAIT);
+    k_thread_create(&driveThreadData, driveThreadStack, DRIVE_THREAD_STACK_SIZE, controlThread, nullptr, nullptr, nullptr, DRIVE_THREAD_PRIORITY, 0, K_NO_WAIT);
 
     Monitor.println("[DRV] Drive system initialised.");
     return true;

@@ -24,11 +24,11 @@ class SpeedController {
     /// Set the maximum acceleration/deceleration in pps per second.
     void setRampLimits(float accelPpsPerSec, float decelPpsPerSec);
 
-    /// Set the desired target speed in pps (signed).
+    /// Set the desired target speed in pps.
     void setTarget(int32_t targetPps);
 
     /// Run one control cycle.
-    /// @param measuredPps  Current encoder speed in signed pps.
+    /// @param measuredPps  Current measured speed in pps.
     /// @param dt           Time since last call in seconds.
     /// @return PWM output in the range [−255, +255].
     int16_t update(int32_t measuredPps, float dt);

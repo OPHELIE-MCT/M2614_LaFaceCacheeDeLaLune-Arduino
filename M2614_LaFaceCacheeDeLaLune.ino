@@ -64,8 +64,8 @@ void setup() {
     Monitor.println("M2614 — Initialising...");
 
     // Apply default calibration endpoints (1000-2000 µs) on all RC channels
-    for (uint8_t i = 0; i < rcReceiver.getChannelCount(); i++) {
-        rcReceiver.getChannel(i)->calibrate(1000, 2000);
+    for (uint8_t i = 0; i < rcReceiver.getChannelCount(); i++) {  // TODO: Only calibrate joystick channels, not buttons/pots
+        rcReceiver.getChannel(i)->calibrate(1000, 2000);          // TODO: add calibration procedure by asking user to move sticks to extremes
     }
 
     // Initialise drive system (runs motor calibration, starts control thread)
