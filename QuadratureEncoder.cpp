@@ -1,38 +1,57 @@
 #include "QuadratureEncoder.h"
 
+#include <Arduino_RouterBridge.h>
+
 #include "PINS.h"
 
 // Pulse counters incremented on B-channel edges.
 static volatile int32_t encoderDeltas[ENCODER_COUNT] = {0, 0, 0, 0};
 
-static void isrFL() {
+static void incrementFrontLeftEncoder() {
     encoderDeltas[ENC_FL]++;
 }
 
-static void isrFR() {
+static void incrementFrontRightEncoder() {
     encoderDeltas[ENC_FR]++;
 }
 
-static void isrBL() {
+static void incrementBackLeftEncoder() {
     encoderDeltas[ENC_BL]++;
 }
 
-static void isrBR() {
+static void incrementBackRightEncoder() {
     encoderDeltas[ENC_BR]++;
+}
+
+static void logInterruptConfig(const char* label, uint8_t pin) {
+    int interruptId = digitalPinToInterrupt(pin);
+
+    Monitor.print("[ENC] ");
+    Monitor.print(label);
+    Monitor.print(" pin=");
+    Monitor.print(pin);
+    Monitor.print(" irq=");
+    Monitor.println(interruptId);
+
+    if (interruptId < 0) {
+        Monitor.print("[ENC] WARNING: ");
+        Monitor.print(label);
+        Monitor.println(" is not interrupt-capable on this core.");
+    }
 }
 
 namespace QuadratureEncoder {
 
 void begin() {
-    // attachInterrupt(digitalPinToInterrupt(FL_ENC_A), isrFL, CHANGE);
-    // attachInterrupt(digitalPinToInterrupt(FR_ENC_A), isrFR, CHANGE);
-    // attachInterrupt(digitalPinToInterrupt(BL_ENC_A), isrBL, CHANGE);
-    // attachInterrupt(digitalPinToInterrupt(BR_ENC_A), isrBR, CHANGE);
+    // logInterruptConfig("FL_ENC_B", FL_ENC_B);
+    // logInterruptConfig("FR_ENC_B", FR_ENC_B);
+    // logInterruptConfig("BL_ENC_B", BL_ENC_B);
+    // logInterruptConfig("BR_ENC_B", BR_ENC_B);
 
-    attachInterrupt(digitalPinToInterrupt(FL_ENC_B), isrFL, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(FR_ENC_B), isrFR, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(BL_ENC_B), isrBL, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(BR_ENC_B), isrBR, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(FL_ENC_B), incrementFrontLeftEncoder, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(FR_ENC_B), incrementFrontRightEncoder, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(BL_ENC_B), incrementBackLeftEncoder, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(BR_ENC_B), incrementBackRightEncoder, CHANGE);
 }
 
 int32_t readAndResetDelta(uint8_t index) {

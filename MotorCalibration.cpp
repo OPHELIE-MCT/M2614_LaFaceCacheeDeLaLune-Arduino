@@ -29,6 +29,23 @@ static void stopMotor(const MotorPins& m) {
     setMotorRaw(m, 0);
 }
 
+static void logDeltaSnapshot(const char* phase, uint8_t motorIdx, const int32_t deltas[4]) {
+    static const char* names[4] = {"FL", "FR", "BL", "BR"};
+
+    Monitor.print("[CALDBG] ");
+    Monitor.print(names[motorIdx]);
+    Monitor.print(" ");
+    Monitor.print(phase);
+    Monitor.print(" deltas FL=");
+    Monitor.print(deltas[0]);
+    Monitor.print(" FR=");
+    Monitor.print(deltas[1]);
+    Monitor.print(" BL=");
+    Monitor.print(deltas[2]);
+    Monitor.print(" BR=");
+    Monitor.println(deltas[3]);
+}
+
 namespace MotorCalibration {
 
 int32_t calibrate(const MotorPins motors[4], uint32_t testDurationMs) {
@@ -39,13 +56,22 @@ int32_t calibrate(const MotorPins motors[4], uint32_t testDurationMs) {
     Monitor.println("[CAL] Starting motor calibration...");
 
     for (uint8_t m = 0; m < 4; m++) {
+        int32_t deltas[4] = {0, 0, 0, 0};
+
         // --- CW test ---
-        QuadratureEncoder::resetDelta(m);
+        for (uint8_t i = 0; i < 4; i++) {
+            QuadratureEncoder::resetDelta(i);
+        }
         setMotorRaw(motors[m], 255);
         delay(testDurationMs);
         stopMotor(motors[m]);
 
-        int32_t deltaCW = QuadratureEncoder::readAndResetDelta(m);
+        for (uint8_t i = 0; i < 4; i++) {
+            deltas[i] = QuadratureEncoder::readAndResetDelta(i);
+        }
+        // logDeltaSnapshot("CW", m, deltas);
+
+        int32_t deltaCW = deltas[m];
         // Convert pulse count over testDurationMs to pulses per second
         int32_t ppsCW = (int32_t)((int64_t)abs(deltaCW) * 1000 / (int64_t)testDurationMs);
         ppsResults[m][0] = ppsCW;
@@ -53,12 +79,19 @@ int32_t calibrate(const MotorPins motors[4], uint32_t testDurationMs) {
         delay(300);  // brief pause between directions
 
         // --- CCW test ---
-        QuadratureEncoder::resetDelta(m);
+        for (uint8_t i = 0; i < 4; i++) {
+            QuadratureEncoder::resetDelta(i);
+        }
         setMotorRaw(motors[m], -255);
         delay(testDurationMs);
         stopMotor(motors[m]);
 
-        int32_t deltaCCW = QuadratureEncoder::readAndResetDelta(m);
+        for (uint8_t i = 0; i < 4; i++) {
+            deltas[i] = QuadratureEncoder::readAndResetDelta(i);
+        }
+        // logDeltaSnapshot("CCW", m, deltas);
+
+        int32_t deltaCCW = deltas[m];
         int32_t ppsCCW = (int32_t)((int64_t)abs(deltaCCW) * 1000 / (int64_t)testDurationMs);
         ppsResults[m][1] = ppsCCW;
 

@@ -61,14 +61,14 @@ constexpr uint8_t FR_IN1 = JMISC10;
 constexpr uint8_t FR_EN = JMISC12;
 
 // Feedback encoders
-constexpr uint8_t FL_ENC_B = JMISC13;
-constexpr uint8_t FL_ENC_A = JMISC14;
+constexpr uint8_t FL_ENC_B = JMISC25;
+constexpr uint8_t FL_ENC_A = JMISC23;
 constexpr uint8_t BR_ENC_A = JMISC15;
 constexpr uint8_t BR_ENC_B = JMISC17;
 constexpr uint8_t BL_ENC_B = JMISC19;
 constexpr uint8_t BL_ENC_A = JMISC21;
-constexpr uint8_t FR_ENC_A = JMISC23;
-constexpr uint8_t FR_ENC_B = JMISC25;
+constexpr uint8_t FR_ENC_A = JMISC14;
+constexpr uint8_t FR_ENC_B = JMISC13;
 
 // RC receiver channels — pins 2-9, wired H→A (pin 2 = CH_H, pin 9 = CH_A)
 constexpr uint8_t RC_PIN_A = 9;
