@@ -48,6 +48,14 @@ void MecanumDriver::stop() {
     setMotor(pins_.rearRight, 0);
 }
 
+void MecanumDriver::driveWheels(int16_t frontLeft, int16_t frontRight, int16_t rearLeft,
+                                int16_t rearRight) {
+    setMotor(pins_.frontLeft, inputToPwm(clampInput(frontLeft)));
+    setMotor(pins_.frontRight, inputToPwm(clampInput(frontRight)));
+    setMotor(pins_.rearLeft, inputToPwm(clampInput(rearLeft)));
+    setMotor(pins_.rearRight, inputToPwm(clampInput(rearRight)));
+}
+
 int16_t MecanumDriver::clampInput(int16_t value) {
     if (value > kInputMax) {
         return kInputMax;

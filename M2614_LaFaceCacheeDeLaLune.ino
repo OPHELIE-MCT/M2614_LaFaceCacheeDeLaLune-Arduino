@@ -29,20 +29,54 @@ FeedbackEncoderPins encoderPins = {
 };
 FeedbackEncoder encoders = FeedbackEncoder(encoderPins);
 
+namespace {
+constexpr uint32_t kControlPeriodMs = 50;
+constexpr float kDefaultDtSeconds = 0.05f;
+constexpr float kMaxSpeedPulsesPerPeriod = 80.0f;
+constexpr int16_t kJoystickDeadzone = 30;
+
+uint32_t lastControlUpdateMs = 0;
+
+int16_t applyDeadzone(int16_t value, int16_t deadzone) {
+    return (value > -deadzone && value < deadzone) ? 0 : value;
+}
+
+float wheelCommandToSpeedSetpoint(int16_t wheelCommand) {
+    return (static_cast<float>(wheelCommand) / 500.0f) * kMaxSpeedPulsesPerPeriod;
+}
+
+float signedMeasuredSpeed(int32_t rawPulseCount, float setpoint) {
+    if (setpoint > 0.0f) {
+        return static_cast<float>(rawPulseCount);
+    }
+    if (setpoint < 0.0f) {
+        return static_cast<float>(-rawPulseCount);
+    }
+    return 0.0f;
+}
+
+void resetSpeedControllers(SpeedController& frontLeft, SpeedController& frontRight, SpeedController& rearLeft, SpeedController& rearRight) {
+    frontLeft.reset();
+    frontRight.reset();
+    rearLeft.reset();
+    rearRight.reset();
+}
+}  // namespace
+
 SpeedControllerConfig speedControllerConfig = {
-    .kp = 0.35f,
-    .ki = 0.08f,
-    .kd = 0.02f,
+    .kp = 6.0f,
+    .ki = 0.5f,
+    .kd = 0.0f,
     .integralMin = -400.0f,
     .integralMax = 400.0f,
     .outputMin = -500.0f,
     .outputMax = 500.0f,
 };
 
-// PSpeedController selectedSpeedControllerImpl(speedControllerConfig);
-// PISpeedController selectedSpeedControllerImpl(speedControllerConfig);
-PIDSpeedController selectedSpeedControllerImpl(speedControllerConfig);
-SpeedController& speedController = selectedSpeedControllerImpl;
+PIDSpeedController frontLeftSpeedController(speedControllerConfig);
+PIDSpeedController frontRightSpeedController(speedControllerConfig);
+PIDSpeedController rearLeftSpeedController(speedControllerConfig);
+PIDSpeedController rearRightSpeedController(speedControllerConfig);
 
 void setup() {
     Monitor.begin();
@@ -51,6 +85,45 @@ void setup() {
     mecanumDriver.begin();
     rc.begin();
     encoders.begin();
+    lastControlUpdateMs = millis();
+    Monitor.println("Setup complete.");
 }
 
-void loop() {}
+void loop() {
+    rc.update();
+
+    const uint32_t nowMs = millis();
+    const uint32_t elapsedMs = nowMs - lastControlUpdateMs;
+    if (elapsedMs < kControlPeriodMs) return;
+
+    lastControlUpdateMs = nowMs;
+
+    const bool hasDriveSignal = rc.isSignalValid(RCChannel::A) && rc.isSignalValid(RCChannel::B) && rc.isSignalValid(RCChannel::D);
+    if (!hasDriveSignal) {
+        mecanumDriver.stop();
+        resetSpeedControllers(frontLeftSpeedController, frontRightSpeedController, rearLeftSpeedController, rearRightSpeedController);
+        return;
+    }
+
+    const int16_t longitudinalCommand = applyDeadzone(rc.getJoystick(RCChannel::A), kJoystickDeadzone);
+    const int16_t lateralCommand = applyDeadzone(rc.getJoystick(RCChannel::B), kJoystickDeadzone);
+    const int16_t rotationCommand = applyDeadzone(rc.getJoystick(RCChannel::D), kJoystickDeadzone);
+
+    const MecanumDriver::WheelCommands targetWheelCommands = MecanumDriver::mix(lateralCommand, longitudinalCommand, rotationCommand);
+
+    const float frontLeftSetpoint = wheelCommandToSpeedSetpoint(targetWheelCommands.frontLeft);
+    const float frontRightSetpoint = wheelCommandToSpeedSetpoint(targetWheelCommands.frontRight);
+    const float rearLeftSetpoint = wheelCommandToSpeedSetpoint(targetWheelCommands.rearLeft);
+    const float rearRightSetpoint = wheelCommandToSpeedSetpoint(targetWheelCommands.rearRight);
+
+    const EncoderSpeedSnapshot measuredSpeeds = encoders.getCurrentSpeed();
+
+    const float dtSeconds = (elapsedMs > 0U) ? (static_cast<float>(elapsedMs) / 1000.0f) : kDefaultDtSeconds;
+
+    const float frontLeftCommand = frontLeftSpeedController.update(frontLeftSetpoint, signedMeasuredSpeed(measuredSpeeds.frontLeft, frontLeftSetpoint), dtSeconds);
+    const float frontRightCommand = frontRightSpeedController.update(frontRightSetpoint, signedMeasuredSpeed(measuredSpeeds.frontRight, frontRightSetpoint), dtSeconds);
+    const float rearLeftCommand = rearLeftSpeedController.update(rearLeftSetpoint, signedMeasuredSpeed(measuredSpeeds.rearLeft, rearLeftSetpoint), dtSeconds);
+    const float rearRightCommand = rearRightSpeedController.update(rearRightSetpoint, signedMeasuredSpeed(measuredSpeeds.rearRight, rearRightSetpoint), dtSeconds);
+
+    mecanumDriver.driveWheels(static_cast<int16_t>(frontLeftCommand), static_cast<int16_t>(frontRightCommand), static_cast<int16_t>(rearLeftCommand), static_cast<int16_t>(rearRightCommand));
+}
