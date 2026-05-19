@@ -28,7 +28,18 @@ Keep only critical facts here. Read the linked documents only when they are rele
 - Preserve existing protocol details when porting code: packet magic bytes, checksums, timing intervals, reset logic, and safety timeouts are part of the system contract.
 - Prefer thin integration layers over large copy-paste merges of prototype sketches.
 - If a change touches both MCU and SBC behavior, document the RPC or message contract in the Markdown docs in the same change.
+- When compiling code for the Uno Q, do not use the VS Code tasks. Run the command by yourself so you can see the full output and debug any compilation issues that may arise. Run the same command as the one defined in the build task.
 - Update [README.md](README.md) when the architecture, responsibilities, or development workflow materially change.
+- When implementing a feature or patching code in header files, keep the formatting and style consistent with the existing code. Ensure every single function and/or methods is documented in a doxygen style docstring comment block, even if the function/method is private. This is critical for maintainability and knowledge transfer to future developers who may not have the context of the original implementation. Those docstrings must be kept updated if the edits impact the signature or behavior.
+- The following fields are mandatory in docstrings:
+  - `@brief` for every function/method, describing its purpose in one or two sentences
+  - `@description` for every complex function/method that requires a more detailed explanation of its behavior, edge cases, or implementation details if quirks or ambiguities are expected because of hardware constraints or external dependencies. Try to avoid using `@description` if the behavior can be fully described in the `@brief` and code comments.
+  - `@param` for every parameter, describing its purpose and expected values. If there is no parameter, don't include this field at all.
+  - `@return` for every non-void function, describing the return value and its meaning. Exclude this field for void functions.
+  - `@throws` for any function that can throw exceptions, describing the conditions under which exceptions are thrown and their types. Exclude this field if the function does not throw any exceptions.
+  - `@author` for every function
+  - `@date` for every function, indicating the date of the last update
+  - omit completely fields that are not applicable instead of writing "none". For example, if a function does not throw any exceptions, does not return any value, and does not take any parameters, its docstring should only include the `@brief`, `@author`, and `@date` fields, etc.
 
 ## Task Routing
 
