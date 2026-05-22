@@ -78,8 +78,61 @@ PIDSpeedController frontRightSpeedController(speedControllerConfig);
 PIDSpeedController rearLeftSpeedController(speedControllerConfig);
 PIDSpeedController rearRightSpeedController(speedControllerConfig);
 
+void testMotors() {
+    Monitor.println("Testing front left motor...");
+    analogWrite(FL_EN, 128);
+    digitalWrite(FL_IN1, HIGH);
+    digitalWrite(FL_IN2, LOW);
+    delay(2000);
+    digitalWrite(FL_IN1, LOW);
+    digitalWrite(FL_IN2, HIGH);
+    delay(2000);
+    digitalWrite(FL_IN1, LOW);
+    digitalWrite(FL_IN2, LOW);
+    analogWrite(FL_EN, 0);
+
+    Monitor.println("Testing front right motor...");
+    analogWrite(FR_EN, 128);
+    digitalWrite(FR_IN1, HIGH);
+    digitalWrite(FR_IN2, LOW);
+    delay(2000);
+    digitalWrite(FR_IN1, LOW);
+    digitalWrite(FR_IN2, HIGH);
+    delay(2000);
+    digitalWrite(FR_IN1, LOW);
+    digitalWrite(FR_IN2, LOW);
+    analogWrite(FR_EN, 0);
+
+    Monitor.println("Testing rear left motor...");
+    analogWrite(BL_EN, 128);
+    digitalWrite(BL_IN1, HIGH);
+    digitalWrite(BL_IN2, LOW);
+    delay(2000);
+    digitalWrite(BL_IN1, LOW);
+    digitalWrite(BL_IN2, HIGH);
+    delay(2000);
+    digitalWrite(BL_IN1, LOW);
+    digitalWrite(BL_IN2, LOW);
+    analogWrite(BL_EN, 0);
+
+    Monitor.println("Testing rear right motor...");
+    analogWrite(BR_EN, 128);
+    digitalWrite(BR_IN1, HIGH);
+    digitalWrite(BR_IN2, LOW);
+    delay(2000);
+    digitalWrite(BR_IN1, LOW);
+    digitalWrite(BR_IN2, HIGH);
+    delay(2000);
+    digitalWrite(BR_IN1, LOW);
+    digitalWrite(BR_IN2, LOW);
+    analogWrite(BR_EN, 0);
+
+    Monitor.println("Motor test sequence complete.");
+}
+
 void setup() {
     Monitor.begin();
+    Monitor.println("===============================");
     Monitor.println("Starting up...");
     pinSetup();
     mecanumDriver.begin();
@@ -87,9 +140,12 @@ void setup() {
     encoders.begin();
     lastControlUpdateMs = millis();
     Monitor.println("Setup complete.");
+    Monitor.println("Starting motor test sequence...");
+    testMotors();
 }
 
 void loop() {
+    // return;  // IGNORE - loop body is currently empty to disable robot control while testing other components
     rc.update();
 
     const uint32_t nowMs = millis();

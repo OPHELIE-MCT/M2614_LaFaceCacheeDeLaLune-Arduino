@@ -47,34 +47,40 @@
 
 /* Sketch definitions */
 // Motors
-constexpr uint8_t FL_EN = JMISC1;
-constexpr uint8_t FL_IN1 = JMISC3;
-constexpr uint8_t FL_IN2 = JMISC5;
-constexpr uint8_t BL_IN2 = JMISC7;
-constexpr uint8_t BL_IN1 = JMISC9;
-constexpr uint8_t BL_EN = JMISC11;
-constexpr uint8_t BR_EN = JMISC2;
+constexpr uint8_t BL_EN = JMISC12;
+constexpr uint8_t BL_IN1 = JMISC10;
+constexpr uint8_t BL_IN2 = JMISC8;
+constexpr uint8_t FR_IN2 = JMISC5;
+constexpr uint8_t FR_IN1 = JMISC3;
+// constexpr uint8_t FR_EN = JMISC1;
+// constexpr uint8_t BR_EN = JMISC2;
+constexpr uint8_t FR_EN = 6;
+constexpr uint8_t BR_EN = 9;
 constexpr uint8_t BR_IN1 = JMISC4;
 constexpr uint8_t BR_IN2 = JMISC6;
-constexpr uint8_t FR_IN2 = JMISC8;
-constexpr uint8_t FR_IN1 = JMISC10;
-constexpr uint8_t FR_EN = JMISC12;
+constexpr uint8_t FL_IN2 = JMISC7;
+constexpr uint8_t FL_IN1 = JMISC9;
+constexpr uint8_t FL_EN = JMISC11;
 
 // Feedback encoders
-constexpr uint8_t FL_ENC_B = JMISC25;
-constexpr uint8_t FL_ENC_A = JMISC23;
+constexpr uint8_t BL_ENC_B = JMISC25;
+constexpr uint8_t BL_ENC_A = JMISC23;
 constexpr uint8_t BR_ENC_A = JMISC15;
 constexpr uint8_t BR_ENC_B = JMISC17;
-constexpr uint8_t BL_ENC_B = JMISC19;
-constexpr uint8_t BL_ENC_A = JMISC21;
-constexpr uint8_t FR_ENC_A = JMISC14;
-constexpr uint8_t FR_ENC_B = JMISC13;
+constexpr uint8_t FR_ENC_B = JMISC19;
+constexpr uint8_t FR_ENC_A = JMISC21;
+constexpr uint8_t FL_ENC_A = JMISC14;
+constexpr uint8_t FL_ENC_B = JMISC13;
 
 // RC receiver channels — pins 2-9, wired H→A (pin 2 = CH_H, pin 9 = CH_A)
-constexpr uint8_t RC_PIN_A = 9;
-constexpr uint8_t RC_PIN_B = 8;
-constexpr uint8_t RC_PIN_C = 7;
-constexpr uint8_t RC_PIN_D = 6;
+// constexpr uint8_t RC_PIN_A = 9;
+// constexpr uint8_t RC_PIN_B = 8;
+constexpr uint8_t RC_PIN_A = 12;
+constexpr uint8_t RC_PIN_B = 11;
+// constexpr uint8_t RC_PIN_C = 7;
+// constexpr uint8_t RC_PIN_D = 6;
+constexpr uint8_t RC_PIN_C = 8;
+constexpr uint8_t RC_PIN_D = 7;
 constexpr uint8_t RC_PIN_E = 5;
 constexpr uint8_t RC_PIN_F = 4;
 constexpr uint8_t RC_PIN_G = 3;

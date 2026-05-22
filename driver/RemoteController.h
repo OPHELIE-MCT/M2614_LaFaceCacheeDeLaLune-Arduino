@@ -169,7 +169,7 @@ class RemoteController {
     static constexpr uint8_t kChannelCount = static_cast<uint8_t>(RCChannel::Count);
     static constexpr uint16_t kPulseMinUs = 890;
     static constexpr uint16_t kPulseMaxUs = 2100;
-    static constexpr uint32_t kSignalTimeoutUs = 50000;
+    static constexpr uint32_t kSignalTimeoutUs = 100000;
 
     static constexpr uint16_t kJoystickMinUs = 890;
     static constexpr uint16_t kJoystickCenterUs = 1496;
