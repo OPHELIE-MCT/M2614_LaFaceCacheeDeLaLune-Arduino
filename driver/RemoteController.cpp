@@ -1,5 +1,7 @@
 #include "RemoteController.h"
 
+RemoteController* RemoteController::instance_ = nullptr;
+
 RemoteController::RemoteController(const RCReceiverPins& pins) {
     channels_[toIndex(RCChannel::A)].pin = pins.a;
     channels_[toIndex(RCChannel::B)].pin = pins.b;
@@ -12,24 +14,39 @@ RemoteController::RemoteController(const RCReceiverPins& pins) {
 }
 
 void RemoteController::begin() {
+    instance_ = this;
+
     for (uint8_t i = 0; i < kChannelCount; ++i) {
         pinMode(channels_[i].pin, INPUT);
+        channels_[i].useInterrupt = false;
         channels_[i].wasHigh = false;
+        channels_[i].sampledHigh = false;
         channels_[i].signalValid = false;
         channels_[i].startPulseTimestampUs = 0;
+        channels_[i].lastRisingEdgeTimestampUs = 0;
+        channels_[i].lastPulseTimestampUs = 0;
+        channels_[i].rawPulseWidthUs = 0;
+        channels_[i].risingEdgeCount = 0;
+        channels_[i].fallingEdgeCount = 0;
         channels_[i].pulseWidthUs = 0;
+
+        attachInterruptIfSupported(channels_[i], i);
     }
 }
 
 void RemoteController::update() {
-    const uint32_t nowUs = micros();
     for (uint8_t i = 0; i < kChannelCount; ++i) {
-        updateChannel(channels_[i], nowUs);
+        const uint32_t nowUs = micros();
+        if (channels_[i].useInterrupt) {
+            updateInterruptDrivenChannel(i, nowUs);
+        } else {
+            updateChannel(channels_[i], nowUs);
+        }
     }
 }
 
 uint16_t RemoteController::getPulseWidthUs(RCChannel channel) const {
-    const ChannelState& state = channels_[toIndex(channel)];
+    const ChannelState state = copyChannelStateAtomic(toIndex(channel));
     if (!state.signalValid) {
         return 0;
     }
@@ -41,7 +58,7 @@ int16_t RemoteController::getJoystick(RCChannel channel) const {
         return 0;
     }
 
-    const ChannelState& state = channels_[toIndex(channel)];
+    const ChannelState state = copyChannelStateAtomic(toIndex(channel));
     if (!state.signalValid) {
         return 0;
     }
@@ -54,7 +71,7 @@ bool RemoteController::getButton(RCChannel channel, uint16_t thresholdUs) const 
         return false;
     }
 
-    const ChannelState& state = channels_[toIndex(channel)];
+    const ChannelState state = copyChannelStateAtomic(toIndex(channel));
     if (!state.signalValid) {
         return false;
     }
@@ -72,7 +89,7 @@ uint16_t RemoteController::getTrimValue(RCChannel channel) const {
         return 0;
     }
 
-    const ChannelState& state = channels_[toIndex(channel)];
+    const ChannelState state = copyChannelStateAtomic(toIndex(channel));
     if (!state.signalValid) {
         return 0;
     }
@@ -85,7 +102,7 @@ int8_t RemoteController::getTrimStep(RCChannel channel) const {
         return 0;
     }
 
-    const ChannelState& state = channels_[toIndex(channel)];
+    const ChannelState state = copyChannelStateAtomic(toIndex(channel));
     if (!state.signalValid) {
         return 0;
     }
@@ -94,11 +111,79 @@ int8_t RemoteController::getTrimStep(RCChannel channel) const {
 }
 
 bool RemoteController::isSignalValid(RCChannel channel) const {
-    return channels_[toIndex(channel)].signalValid;
+    return copyChannelStateAtomic(toIndex(channel)).signalValid;
+}
+
+RCDebugSnapshot RemoteController::getDebugSnapshot(RCChannel channel) const {
+    const ChannelState state = copyChannelStateAtomic(toIndex(channel));
+    const uint32_t nowUs = micros();
+
+    RCDebugSnapshot snapshot;
+    snapshot.pin = state.pin;
+    snapshot.sampledHigh = state.sampledHigh;
+    snapshot.signalValid = state.signalValid;
+    snapshot.clampedPulseWidthUs = state.pulseWidthUs;
+    snapshot.rawPulseWidthUs = state.rawPulseWidthUs;
+    snapshot.ageSinceLastRiseUs = (state.lastRisingEdgeTimestampUs == 0U) ? 0U : (nowUs - state.lastRisingEdgeTimestampUs);
+    snapshot.ageSinceLastPulseUs = (state.lastPulseTimestampUs == 0U) ? 0U : (nowUs - state.lastPulseTimestampUs);
+    snapshot.risingEdgeCount = state.risingEdgeCount;
+    snapshot.fallingEdgeCount = state.fallingEdgeCount;
+    return snapshot;
 }
 
 uint8_t RemoteController::toIndex(RCChannel channel) {
     return static_cast<uint8_t>(channel);
+}
+
+void RemoteController::attachInterruptIfSupported(ChannelState& state, uint8_t channelIndex) {
+    if (channelIndex >= kChannelCount) {
+        return;
+    }
+
+    const int interruptId = digitalPinToInterrupt(state.pin);
+    if (interruptId < 0) {
+        state.useInterrupt = false;
+        return;
+    }
+
+    switch (channelIndex) {
+        case 0:
+            attachInterrupt(interruptId, handleInterruptA, CHANGE);
+            break;
+        case 1:
+            attachInterrupt(interruptId, handleInterruptB, CHANGE);
+            break;
+        case 2:
+            attachInterrupt(interruptId, handleInterruptC, CHANGE);
+            break;
+        case 3:
+            attachInterrupt(interruptId, handleInterruptD, CHANGE);
+            break;
+        case 4:
+            attachInterrupt(interruptId, handleInterruptE, CHANGE);
+            break;
+        case 5:
+            attachInterrupt(interruptId, handleInterruptF, CHANGE);
+            break;
+        case 6:
+            attachInterrupt(interruptId, handleInterruptG, CHANGE);
+            break;
+        case 7:
+            attachInterrupt(interruptId, handleInterruptH, CHANGE);
+            break;
+        default:
+            state.useInterrupt = false;
+            return;
+    }
+
+    state.useInterrupt = true;
+}
+
+RemoteController::ChannelState RemoteController::copyChannelStateAtomic(uint8_t channelIndex) const {
+    noInterrupts();
+    const ChannelState stateCopy = channels_[channelIndex];
+    interrupts();
+    return stateCopy;
 }
 
 bool RemoteController::isJoystickChannel(RCChannel channel) {
@@ -116,18 +201,91 @@ bool RemoteController::isTrimChannel(RCChannel channel) {
 
 void RemoteController::updateChannel(ChannelState& state, uint32_t nowUs) {
     const bool isHigh = digitalRead(state.pin) == HIGH;
+    state.sampledHigh = isHigh;
 
     if (isHigh && !state.wasHigh) {
         state.startPulseTimestampUs = nowUs;
+        state.lastRisingEdgeTimestampUs = nowUs;
+        ++state.risingEdgeCount;
     } else if (!isHigh && state.wasHigh) {
-        state.pulseWidthUs = clampPulse(static_cast<uint16_t>(nowUs - state.startPulseTimestampUs));
+        state.rawPulseWidthUs = nowUs - state.startPulseTimestampUs;
+        state.pulseWidthUs = clampPulse(static_cast<uint16_t>(state.rawPulseWidthUs));
+        state.lastPulseTimestampUs = nowUs;
+        ++state.fallingEdgeCount;
         state.signalValid = true;
-    } else if (!isHigh && (nowUs - state.startPulseTimestampUs) > kSignalTimeoutUs) {
+    } else if (!isHigh && state.startPulseTimestampUs != 0U && (nowUs - state.startPulseTimestampUs) > kSignalTimeoutUs) {
         state.pulseWidthUs = 0;
         state.signalValid = false;
     }
 
     state.wasHigh = isHigh;
+}
+
+void RemoteController::updateInterruptDrivenChannel(uint8_t channelIndex, uint32_t nowUs) {
+    noInterrupts();
+    ChannelState& state = channels_[channelIndex];
+    if (state.startPulseTimestampUs != 0U && (nowUs - state.startPulseTimestampUs) > kSignalTimeoutUs) {
+        state.pulseWidthUs = 0;
+        state.signalValid = false;
+    }
+    interrupts();
+}
+
+void RemoteController::onInterrupt(uint8_t channelIndex) {
+    if (instance_ == nullptr || channelIndex >= kChannelCount) {
+        return;
+    }
+
+    ChannelState& state = instance_->channels_[channelIndex];
+    const uint32_t nowUs = micros();
+    const bool isHigh = digitalRead(state.pin) == HIGH;
+    state.sampledHigh = isHigh;
+
+    if (isHigh && !state.wasHigh) {
+        state.startPulseTimestampUs = nowUs;
+        state.lastRisingEdgeTimestampUs = nowUs;
+        ++state.risingEdgeCount;
+    } else if (!isHigh && state.wasHigh) {
+        state.rawPulseWidthUs = nowUs - state.startPulseTimestampUs;
+        state.pulseWidthUs = clampPulse(static_cast<uint16_t>(state.rawPulseWidthUs));
+        state.lastPulseTimestampUs = nowUs;
+        ++state.fallingEdgeCount;
+        state.signalValid = true;
+    }
+
+    state.wasHigh = isHigh;
+}
+
+void RemoteController::handleInterruptA() {
+    onInterrupt(toIndex(RCChannel::A));
+}
+
+void RemoteController::handleInterruptB() {
+    onInterrupt(toIndex(RCChannel::B));
+}
+
+void RemoteController::handleInterruptC() {
+    onInterrupt(toIndex(RCChannel::C));
+}
+
+void RemoteController::handleInterruptD() {
+    onInterrupt(toIndex(RCChannel::D));
+}
+
+void RemoteController::handleInterruptE() {
+    onInterrupt(toIndex(RCChannel::E));
+}
+
+void RemoteController::handleInterruptF() {
+    onInterrupt(toIndex(RCChannel::F));
+}
+
+void RemoteController::handleInterruptG() {
+    onInterrupt(toIndex(RCChannel::G));
+}
+
+void RemoteController::handleInterruptH() {
+    onInterrupt(toIndex(RCChannel::H));
 }
 
 uint16_t RemoteController::clampPulse(uint16_t pulseUs) {

@@ -43,6 +43,24 @@ enum class RCChannel : uint8_t {
 };
 
 /**
+ * @struct RCDebugSnapshot
+ * @brief Captures the latest low-level state of one RC channel for diagnostics.
+ * @author GOLETTA David
+ * @date 2026-05-28
+ */
+struct RCDebugSnapshot {
+    uint8_t pin = 0;
+    bool sampledHigh = false;
+    bool signalValid = false;
+    uint16_t clampedPulseWidthUs = 0;
+    uint32_t rawPulseWidthUs = 0;
+    uint32_t ageSinceLastRiseUs = 0;
+    uint32_t ageSinceLastPulseUs = 0;
+    uint32_t risingEdgeCount = 0;
+    uint32_t fallingEdgeCount = 0;
+};
+
+/**
  * @class RemoteController
  * @brief Reads 8 RC PWM channels and exposes typed controls.
  *
@@ -165,6 +183,15 @@ class RemoteController {
      */
     bool isSignalValid(RCChannel channel) const;
 
+    /**
+     * @brief Return low-level channel diagnostics for debugging invalid signals.
+     * @param channel Channel identifier A..H.
+     * @return Snapshot containing pin level, pulse widths, pulse age, and edge counters.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    RCDebugSnapshot getDebugSnapshot(RCChannel channel) const;
+
    private:
     static constexpr uint8_t kChannelCount = static_cast<uint8_t>(RCChannel::Count);
     static constexpr uint16_t kPulseMinUs = 890;
@@ -187,13 +214,21 @@ class RemoteController {
 
     struct ChannelState {
         uint8_t pin = 0;
+        bool useInterrupt = false;
         bool wasHigh = false;
+        bool sampledHigh = false;
         bool signalValid = false;
         uint32_t startPulseTimestampUs = 0;
+        uint32_t lastRisingEdgeTimestampUs = 0;
+        uint32_t lastPulseTimestampUs = 0;
+        uint32_t rawPulseWidthUs = 0;
+        uint32_t risingEdgeCount = 0;
+        uint32_t fallingEdgeCount = 0;
         uint16_t pulseWidthUs = 0;
     };
 
     ChannelState channels_[kChannelCount];
+    static RemoteController* instance_;
 
     /**
      * @brief Convert channel enum to index.
@@ -205,6 +240,25 @@ class RemoteController {
      * @date 2026-05-18
      */
     static uint8_t toIndex(RCChannel channel);
+
+    /**
+     * @brief Attach an interrupt handler for one channel when supported by the pin.
+     * @param state Mutable state for one channel.
+     * @param channelIndex Zero-based channel index.
+     * @return None.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    static void attachInterruptIfSupported(ChannelState& state, uint8_t channelIndex);
+
+    /**
+     * @brief Read one channel state atomically to avoid ISR/main-loop race conditions.
+     * @param channelIndex Zero-based channel index.
+     * @return Snapshot copy of the channel state.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    ChannelState copyChannelStateAtomic(uint8_t channelIndex) const;
 
     /**
      * @brief Check whether a channel is a joystick component.
@@ -250,6 +304,81 @@ class RemoteController {
      * @date 2026-05-18
      */
     static void updateChannel(ChannelState& state, uint32_t nowUs);
+
+    /**
+     * @brief Update timeout validity for an interrupt-driven channel.
+     * @param channelIndex Zero-based channel index.
+     * @param nowUs Current timestamp from micros().
+     * @return None.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    void updateInterruptDrivenChannel(uint8_t channelIndex, uint32_t nowUs);
+
+    /**
+     * @brief Handle one GPIO edge interrupt and update pulse timing state.
+     * @param channelIndex Zero-based channel index.
+     * @return None.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    static void onInterrupt(uint8_t channelIndex);
+
+    /**
+     * @brief ISR trampoline for channel A.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    static void handleInterruptA();
+
+    /**
+     * @brief ISR trampoline for channel B.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    static void handleInterruptB();
+
+    /**
+     * @brief ISR trampoline for channel C.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    static void handleInterruptC();
+
+    /**
+     * @brief ISR trampoline for channel D.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    static void handleInterruptD();
+
+    /**
+     * @brief ISR trampoline for channel E.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    static void handleInterruptE();
+
+    /**
+     * @brief ISR trampoline for channel F.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    static void handleInterruptF();
+
+    /**
+     * @brief ISR trampoline for channel G.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    static void handleInterruptG();
+
+    /**
+     * @brief ISR trampoline for channel H.
+     * @author GOLETTA David
+     * @date 2026-05-28
+     */
+    static void handleInterruptH();
 
     /**
      * @brief Clamp a pulse width to receiver limits.

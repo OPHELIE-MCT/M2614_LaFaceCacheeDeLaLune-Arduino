@@ -72,19 +72,19 @@ constexpr uint8_t FR_ENC_A = JMISC21;
 constexpr uint8_t FL_ENC_A = JMISC14;
 constexpr uint8_t FL_ENC_B = JMISC13;
 
-// RC receiver channels — pins 2-9, wired H→A (pin 2 = CH_H, pin 9 = CH_A)
+// RC receiver channels
 // constexpr uint8_t RC_PIN_A = 9;
 // constexpr uint8_t RC_PIN_B = 8;
-constexpr uint8_t RC_PIN_A = 12;
-constexpr uint8_t RC_PIN_B = 11;
+constexpr uint8_t RC_PIN_H = 13;
+constexpr uint8_t RC_PIN_G = 12;
 // constexpr uint8_t RC_PIN_C = 7;
 // constexpr uint8_t RC_PIN_D = 6;
-constexpr uint8_t RC_PIN_C = 8;
-constexpr uint8_t RC_PIN_D = 7;
-constexpr uint8_t RC_PIN_E = 5;
-constexpr uint8_t RC_PIN_F = 4;
-constexpr uint8_t RC_PIN_G = 3;
-constexpr uint8_t RC_PIN_H = 2;
+constexpr uint8_t RC_PIN_F = 8;
+constexpr uint8_t RC_PIN_E = 7;
+constexpr uint8_t RC_PIN_D = 5;
+constexpr uint8_t RC_PIN_C = 4;
+constexpr uint8_t RC_PIN_B = 3;
+constexpr uint8_t RC_PIN_A = 2;
 
 // Initialization of sketch pins
 inline void pinSetup() {

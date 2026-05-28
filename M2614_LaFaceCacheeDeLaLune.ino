@@ -31,11 +31,18 @@ FeedbackEncoder encoders = FeedbackEncoder(encoderPins);
 
 namespace {
 constexpr uint32_t kControlPeriodMs = 50;
+constexpr uint32_t kRcDebugPeriodMs = 250;
 constexpr float kDefaultDtSeconds = 0.05f;
 constexpr float kMaxSpeedPulsesPerPeriod = 80.0f;
 constexpr int16_t kJoystickDeadzone = 30;
 
 uint32_t lastControlUpdateMs = 0;
+uint32_t lastRcDebugPrintMs = 0;
+uint32_t lastRcUpdateUs = 0;
+uint32_t rcUpdateIntervalMinUs = 0xFFFFFFFFUL;
+uint32_t rcUpdateIntervalMaxUs = 0;
+uint32_t rcUpdateIntervalSumUs = 0;
+uint32_t rcUpdateIntervalCount = 0;
 
 int16_t applyDeadzone(int16_t value, int16_t deadzone) {
     return (value > -deadzone && value < deadzone) ? 0 : value;
@@ -60,6 +67,94 @@ void resetSpeedControllers(SpeedController& frontLeft, SpeedController& frontRig
     frontRight.reset();
     rearLeft.reset();
     rearRight.reset();
+}
+
+const char* rcChannelName(RCChannel channel) {
+    switch (channel) {
+        case RCChannel::A:
+            return "A";
+        case RCChannel::B:
+            return "B";
+        case RCChannel::C:
+            return "C";
+        case RCChannel::D:
+            return "D";
+        case RCChannel::E:
+            return "E";
+        case RCChannel::F:
+            return "F";
+        case RCChannel::G:
+            return "G";
+        case RCChannel::H:
+            return "H";
+        case RCChannel::Count:
+        default:
+            return "?";
+    }
+}
+
+void printRcDebugChannel(RCChannel channel) {
+    const RCDebugSnapshot debug = rc.getDebugSnapshot(channel);
+
+    Monitor.println(
+        String("  ") + rcChannelName(channel) +
+        " pin=" + String(debug.pin) +
+        " lvl=" + String(debug.sampledHigh ? 1 : 0) +
+        " valid=" + String(debug.signalValid ? 1 : 0) +
+        " rawUs=" + String(debug.rawPulseWidthUs) +
+        " pulseUs=" + String(debug.clampedPulseWidthUs) +
+        " riseAgeUs=" + String(debug.ageSinceLastRiseUs) +
+        " pulseAgeUs=" + String(debug.ageSinceLastPulseUs) +
+        " edges=" + String(debug.risingEdgeCount) + "/" + String(debug.fallingEdgeCount));
+}
+
+void printRcDebugSummary(uint32_t nowMs, uint32_t elapsedMs) {
+    if ((nowMs - lastRcDebugPrintMs) < kRcDebugPeriodMs) {
+        return;
+    }
+
+    lastRcDebugPrintMs = nowMs;
+    Monitor.println(String("[RC DEBUG] invalid drive signal dtMs=") + String(elapsedMs));
+    printRcDebugChannel(RCChannel::A);
+    printRcDebugChannel(RCChannel::B);
+    printRcDebugChannel(RCChannel::C);
+    printRcDebugChannel(RCChannel::D);
+    printRcDebugChannel(RCChannel::E);
+    printRcDebugChannel(RCChannel::F);
+    printRcDebugChannel(RCChannel::G);
+    printRcDebugChannel(RCChannel::H);
+}
+
+void noteRcUpdateCadence(uint32_t nowUs) {
+    if (lastRcUpdateUs != 0U) {
+        const uint32_t dtUs = nowUs - lastRcUpdateUs;
+        if (dtUs < rcUpdateIntervalMinUs) {
+            rcUpdateIntervalMinUs = dtUs;
+        }
+        if (dtUs > rcUpdateIntervalMaxUs) {
+            rcUpdateIntervalMaxUs = dtUs;
+        }
+        rcUpdateIntervalSumUs += dtUs;
+        ++rcUpdateIntervalCount;
+    }
+    lastRcUpdateUs = nowUs;
+}
+
+void printRcUpdateCadence() {
+    const uint32_t minUs = (rcUpdateIntervalCount > 0U) ? rcUpdateIntervalMinUs : 0U;
+    const uint32_t maxUs = (rcUpdateIntervalCount > 0U) ? rcUpdateIntervalMaxUs : 0U;
+    const uint32_t avgUs = (rcUpdateIntervalCount > 0U) ? (rcUpdateIntervalSumUs / rcUpdateIntervalCount) : 0U;
+
+    Monitor.println(
+        String("[DEBUG] RC cadence avg=") + String(avgUs) + "us" +
+        " min=" + String(minUs) + "us" +
+        " max=" + String(maxUs) + "us" +
+        " samples=" + String(rcUpdateIntervalCount));
+
+    rcUpdateIntervalMinUs = 0xFFFFFFFFUL;
+    rcUpdateIntervalMaxUs = 0;
+    rcUpdateIntervalSumUs = 0;
+    rcUpdateIntervalCount = 0;
 }
 }  // namespace
 
@@ -134,6 +229,15 @@ void setup() {
     Monitor.begin();
     Monitor.println("===============================");
     Monitor.println("Starting up...");
+    Monitor.println(
+        String("[RC DEBUG] Pins A=") + String(RC_PIN_A) +
+        " B=" + String(RC_PIN_B) +
+        " C=" + String(RC_PIN_C) +
+        " D=" + String(RC_PIN_D) +
+        " E=" + String(RC_PIN_E) +
+        " F=" + String(RC_PIN_F) +
+        " G=" + String(RC_PIN_G) +
+        " H=" + String(RC_PIN_H));
     pinSetup();
     mecanumDriver.begin();
     rc.begin();
@@ -146,6 +250,8 @@ void setup() {
 
 void loop() {
     // return;  // IGNORE - loop body is currently empty to disable robot control while testing other components
+    const uint32_t rcUpdateNowUs = micros();
+    noteRcUpdateCadence(rcUpdateNowUs);
     rc.update();
 
     const uint32_t nowMs = millis();
@@ -156,11 +262,17 @@ void loop() {
 
     const bool hasDriveSignal = rc.isSignalValid(RCChannel::A) && rc.isSignalValid(RCChannel::B) && rc.isSignalValid(RCChannel::D);
     if (!hasDriveSignal) {
+        printRcDebugSummary(nowMs, elapsedMs);
         mecanumDriver.stop();
         resetSpeedControllers(frontLeftSpeedController, frontRightSpeedController, rearLeftSpeedController, rearRightSpeedController);
         return;
     }
 
+    Monitor.println(
+        String("[DEBUG] RC A=") + String(rc.getJoystick(RCChannel::A)) + " (" + String(rc.getPulseWidthUs(RCChannel::A)) + "us)" +
+        " B=" + String(rc.getJoystick(RCChannel::B)) + " (" + String(rc.getPulseWidthUs(RCChannel::B)) + "us)" +
+        " D=" + String(rc.getJoystick(RCChannel::D)) + " (" + String(rc.getPulseWidthUs(RCChannel::D)) + "us)");
+    printRcUpdateCadence();
     const int16_t longitudinalCommand = applyDeadzone(rc.getJoystick(RCChannel::A), kJoystickDeadzone);
     const int16_t lateralCommand = applyDeadzone(rc.getJoystick(RCChannel::B), kJoystickDeadzone);
     const int16_t rotationCommand = applyDeadzone(rc.getJoystick(RCChannel::D), kJoystickDeadzone);
