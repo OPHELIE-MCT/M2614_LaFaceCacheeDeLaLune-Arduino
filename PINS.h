@@ -47,20 +47,18 @@
 
 /* Sketch definitions */
 // Motors
-constexpr uint8_t BL_EN = JMISC12;
-constexpr uint8_t BL_IN1 = JMISC10;
-constexpr uint8_t BL_IN2 = JMISC8;
-constexpr uint8_t FR_IN2 = JMISC5;
-constexpr uint8_t FR_IN1 = JMISC3;
-// constexpr uint8_t FR_EN = JMISC1;
-// constexpr uint8_t BR_EN = JMISC2;
-constexpr uint8_t FR_EN = 6;
-constexpr uint8_t BR_EN = 9;
-constexpr uint8_t BR_IN1 = JMISC4;
-constexpr uint8_t BR_IN2 = JMISC6;
-constexpr uint8_t FL_IN2 = JMISC7;
-constexpr uint8_t FL_IN1 = JMISC9;
-constexpr uint8_t FL_EN = JMISC11;
+constexpr uint8_t BL_IN2 = JMISC3;
+constexpr uint8_t BL_IN1 = JMISC5;
+constexpr uint8_t BR_IN2 = JMISC7;
+constexpr uint8_t BR_IN1 = JMISC9;
+constexpr uint8_t FL_IN1 = JMISC4;
+constexpr uint8_t FL_IN2 = JMISC6;
+constexpr uint8_t FR_IN1 = JMISC8;
+constexpr uint8_t FR_IN2 = JMISC10;
+constexpr uint8_t FL_EN = 6;
+constexpr uint8_t FR_EN = 9;
+constexpr uint8_t BR_EN = 10;
+constexpr uint8_t BL_EN = 11;
 
 // Feedback encoders
 constexpr uint8_t BL_ENC_B = JMISC25;

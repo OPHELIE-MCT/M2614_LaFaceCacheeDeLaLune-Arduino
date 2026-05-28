@@ -62,12 +62,12 @@ float signedMeasuredSpeed(int32_t rawPulseCount, float setpoint) {
     return 0.0f;
 }
 
-void resetSpeedControllers(SpeedController& frontLeft, SpeedController& frontRight, SpeedController& rearLeft, SpeedController& rearRight) {
-    frontLeft.reset();
-    frontRight.reset();
-    rearLeft.reset();
-    rearRight.reset();
-}
+// void resetSpeedControllers(SpeedController& frontLeft, SpeedController& frontRight, SpeedController& rearLeft, SpeedController& rearRight) {
+//     frontLeft.reset();
+//     frontRight.reset();
+//     rearLeft.reset();
+//     rearRight.reset();
+// }
 
 const char* rcChannelName(RCChannel channel) {
     switch (channel) {
@@ -158,20 +158,20 @@ void printRcUpdateCadence() {
 }
 }  // namespace
 
-SpeedControllerConfig speedControllerConfig = {
-    .kp = 6.0f,
-    .ki = 0.5f,
-    .kd = 0.0f,
-    .integralMin = -400.0f,
-    .integralMax = 400.0f,
-    .outputMin = -500.0f,
-    .outputMax = 500.0f,
-};
-
-PIDSpeedController frontLeftSpeedController(speedControllerConfig);
-PIDSpeedController frontRightSpeedController(speedControllerConfig);
-PIDSpeedController rearLeftSpeedController(speedControllerConfig);
-PIDSpeedController rearRightSpeedController(speedControllerConfig);
+// SpeedControllerConfig speedControllerConfig = {
+//     .kp = 6.0f,
+//     .ki = 0.5f,
+//     .kd = 0.0f,
+//     .integralMin = -400.0f,
+//     .integralMax = 400.0f,
+//     .outputMin = -500.0f,
+//     .outputMax = 500.0f,
+// };
+//
+// PIDSpeedController frontLeftSpeedController(speedControllerConfig);
+// PIDSpeedController frontRightSpeedController(speedControllerConfig);
+// PIDSpeedController rearLeftSpeedController(speedControllerConfig);
+// PIDSpeedController rearRightSpeedController(speedControllerConfig);
 
 void testMotors() {
     Monitor.println("Testing front left motor...");
@@ -225,27 +225,89 @@ void testMotors() {
     Monitor.println("Motor test sequence complete.");
 }
 
+void testEnMapping() {
+    digitalWrite(FL_IN1, HIGH);
+    digitalWrite(FL_IN2, LOW);
+    digitalWrite(FR_IN1, HIGH);
+    digitalWrite(FR_IN2, LOW);
+    digitalWrite(BL_IN1, HIGH);
+    digitalWrite(BL_IN2, LOW);
+    digitalWrite(BR_IN1, HIGH);
+    digitalWrite(BR_IN2, LOW);
+
+    constexpr uint8_t speed = 35;
+    Monitor.println("Front right");
+    analogWrite(FR_EN, speed);
+    delay(2000);
+    analogWrite(FR_EN, 0);
+    Monitor.println("Front left");
+    analogWrite(FL_EN, speed);
+    delay(2000);
+    analogWrite(FL_EN, 0);
+    Monitor.println("Back right");
+    analogWrite(BR_EN, speed);
+    delay(2000);
+    analogWrite(BR_EN, 0);
+    Monitor.println("Back left");
+    analogWrite(BL_EN, speed);
+    delay(2000);
+    analogWrite(BL_EN, 0);
+
+    Monitor.println("EN mapping test complete.");
+}
+
+void testInDirections() {
+    analogWrite(FL_EN, 35);
+    analogWrite(FR_EN, 35);
+    analogWrite(BL_EN, 35);
+    analogWrite(BR_EN, 35);
+
+    Monitor.println("Testing forward direction...");
+    digitalWrite(FL_IN1, HIGH);
+    digitalWrite(FL_IN2, LOW);
+    digitalWrite(FR_IN1, HIGH);
+    digitalWrite(FR_IN2, LOW);
+    digitalWrite(BL_IN1, HIGH);
+    digitalWrite(BL_IN2, LOW);
+    digitalWrite(BR_IN1, HIGH);
+    digitalWrite(BR_IN2, LOW);
+    delay(5000);
+
+    Monitor.println("Testing reverse direction...");
+    digitalWrite(FL_IN1, LOW);
+    digitalWrite(FL_IN2, HIGH);
+    digitalWrite(FR_IN1, LOW);
+    digitalWrite(FR_IN2, HIGH);
+    digitalWrite(BL_IN1, LOW);
+    digitalWrite(BL_IN2, HIGH);
+    digitalWrite(BR_IN1, LOW);
+    digitalWrite(BR_IN2, HIGH);
+    delay(5000);
+
+    Monitor.println("Testing stop...");
+    digitalWrite(FL_IN1, LOW);
+    digitalWrite(FL_IN2, LOW);
+    digitalWrite(FR_IN1, LOW);
+    digitalWrite(FR_IN2, LOW);
+    digitalWrite(BL_IN1, LOW);
+    digitalWrite(BL_IN2, LOW);
+    digitalWrite(BR_IN1, LOW);
+    digitalWrite(BR_IN2, LOW);
+    delay(1500);
+
+    Monitor.println("Direction test sequence complete.");
+}
+
 void setup() {
     Monitor.begin();
     Monitor.println("===============================");
     Monitor.println("Starting up...");
-    Monitor.println(
-        String("[RC DEBUG] Pins A=") + String(RC_PIN_A) +
-        " B=" + String(RC_PIN_B) +
-        " C=" + String(RC_PIN_C) +
-        " D=" + String(RC_PIN_D) +
-        " E=" + String(RC_PIN_E) +
-        " F=" + String(RC_PIN_F) +
-        " G=" + String(RC_PIN_G) +
-        " H=" + String(RC_PIN_H));
     pinSetup();
     mecanumDriver.begin();
     rc.begin();
     encoders.begin();
     lastControlUpdateMs = millis();
     Monitor.println("Setup complete.");
-    Monitor.println("Starting motor test sequence...");
-    testMotors();
 }
 
 void loop() {
@@ -262,9 +324,9 @@ void loop() {
 
     const bool hasDriveSignal = rc.isSignalValid(RCChannel::A) && rc.isSignalValid(RCChannel::B) && rc.isSignalValid(RCChannel::D);
     if (!hasDriveSignal) {
-        printRcDebugSummary(nowMs, elapsedMs);
+        // printRcDebugSummary(nowMs, elapsedMs);
         mecanumDriver.stop();
-        resetSpeedControllers(frontLeftSpeedController, frontRightSpeedController, rearLeftSpeedController, rearRightSpeedController);
+        // resetSpeedControllers(frontLeftSpeedController, frontRightSpeedController, rearLeftSpeedController, rearRightSpeedController);
         return;
     }
 
@@ -288,10 +350,15 @@ void loop() {
 
     const float dtSeconds = (elapsedMs > 0U) ? (static_cast<float>(elapsedMs) / 1000.0f) : kDefaultDtSeconds;
 
-    const float frontLeftCommand = frontLeftSpeedController.update(frontLeftSetpoint, signedMeasuredSpeed(measuredSpeeds.frontLeft, frontLeftSetpoint), dtSeconds);
-    const float frontRightCommand = frontRightSpeedController.update(frontRightSetpoint, signedMeasuredSpeed(measuredSpeeds.frontRight, frontRightSetpoint), dtSeconds);
-    const float rearLeftCommand = rearLeftSpeedController.update(rearLeftSetpoint, signedMeasuredSpeed(measuredSpeeds.rearLeft, rearLeftSetpoint), dtSeconds);
-    const float rearRightCommand = rearRightSpeedController.update(rearRightSetpoint, signedMeasuredSpeed(measuredSpeeds.rearRight, rearRightSetpoint), dtSeconds);
+    // const float frontLeftCommand = frontLeftSpeedController.update(frontLeftSetpoint, signedMeasuredSpeed(measuredSpeeds.frontLeft, frontLeftSetpoint), dtSeconds);
+    // const float frontRightCommand = frontRightSpeedController.update(frontRightSetpoint, signedMeasuredSpeed(measuredSpeeds.frontRight, frontRightSetpoint), dtSeconds);
+    // const float rearLeftCommand = rearLeftSpeedController.update(rearLeftSetpoint, signedMeasuredSpeed(measuredSpeeds.rearLeft, rearLeftSetpoint), dtSeconds);
+    // const float rearRightCommand = rearRightSpeedController.update(rearRightSetpoint, signedMeasuredSpeed(measuredSpeeds.rearRight, rearRightSetpoint), dtSeconds);
+
+    const float frontLeftCommand = frontLeftSetpoint;
+    const float frontRightCommand = frontRightSetpoint;
+    const float rearLeftCommand = rearLeftSetpoint;
+    const float rearRightCommand = rearRightSetpoint;
 
     mecanumDriver.driveWheels(static_cast<int16_t>(frontLeftCommand), static_cast<int16_t>(frontRightCommand), static_cast<int16_t>(rearLeftCommand), static_cast<int16_t>(rearRightCommand));
 }
