@@ -225,79 +225,6 @@ void testMotors() {
     Monitor.println("Motor test sequence complete.");
 }
 
-void testEnMapping() {
-    digitalWrite(FL_IN1, HIGH);
-    digitalWrite(FL_IN2, LOW);
-    digitalWrite(FR_IN1, HIGH);
-    digitalWrite(FR_IN2, LOW);
-    digitalWrite(BL_IN1, HIGH);
-    digitalWrite(BL_IN2, LOW);
-    digitalWrite(BR_IN1, HIGH);
-    digitalWrite(BR_IN2, LOW);
-
-    constexpr uint8_t speed = 35;
-    Monitor.println("Front right");
-    analogWrite(FR_EN, speed);
-    delay(2000);
-    analogWrite(FR_EN, 0);
-    Monitor.println("Front left");
-    analogWrite(FL_EN, speed);
-    delay(2000);
-    analogWrite(FL_EN, 0);
-    Monitor.println("Back right");
-    analogWrite(BR_EN, speed);
-    delay(2000);
-    analogWrite(BR_EN, 0);
-    Monitor.println("Back left");
-    analogWrite(BL_EN, speed);
-    delay(2000);
-    analogWrite(BL_EN, 0);
-
-    Monitor.println("EN mapping test complete.");
-}
-
-void testInDirections() {
-    analogWrite(FL_EN, 35);
-    analogWrite(FR_EN, 35);
-    analogWrite(BL_EN, 35);
-    analogWrite(BR_EN, 35);
-
-    Monitor.println("Testing forward direction...");
-    digitalWrite(FL_IN1, HIGH);
-    digitalWrite(FL_IN2, LOW);
-    digitalWrite(FR_IN1, HIGH);
-    digitalWrite(FR_IN2, LOW);
-    digitalWrite(BL_IN1, HIGH);
-    digitalWrite(BL_IN2, LOW);
-    digitalWrite(BR_IN1, HIGH);
-    digitalWrite(BR_IN2, LOW);
-    delay(5000);
-
-    Monitor.println("Testing reverse direction...");
-    digitalWrite(FL_IN1, LOW);
-    digitalWrite(FL_IN2, HIGH);
-    digitalWrite(FR_IN1, LOW);
-    digitalWrite(FR_IN2, HIGH);
-    digitalWrite(BL_IN1, LOW);
-    digitalWrite(BL_IN2, HIGH);
-    digitalWrite(BR_IN1, LOW);
-    digitalWrite(BR_IN2, HIGH);
-    delay(5000);
-
-    Monitor.println("Testing stop...");
-    digitalWrite(FL_IN1, LOW);
-    digitalWrite(FL_IN2, LOW);
-    digitalWrite(FR_IN1, LOW);
-    digitalWrite(FR_IN2, LOW);
-    digitalWrite(BL_IN1, LOW);
-    digitalWrite(BL_IN2, LOW);
-    digitalWrite(BR_IN1, LOW);
-    digitalWrite(BR_IN2, LOW);
-    delay(1500);
-
-    Monitor.println("Direction test sequence complete.");
-}
-
 void setup() {
     Monitor.begin();
     Monitor.println("===============================");
@@ -330,11 +257,11 @@ void loop() {
         return;
     }
 
-    Monitor.println(
-        String("[DEBUG] RC A=") + String(rc.getJoystick(RCChannel::A)) + " (" + String(rc.getPulseWidthUs(RCChannel::A)) + "us)" +
-        " B=" + String(rc.getJoystick(RCChannel::B)) + " (" + String(rc.getPulseWidthUs(RCChannel::B)) + "us)" +
-        " D=" + String(rc.getJoystick(RCChannel::D)) + " (" + String(rc.getPulseWidthUs(RCChannel::D)) + "us)");
-    printRcUpdateCadence();
+    // Monitor.println(
+    //     String("[DEBUG] RC A=") + String(rc.getJoystick(RCChannel::A)) + " (" + String(rc.getPulseWidthUs(RCChannel::A)) + "us)" +
+    //     " B=" + String(rc.getJoystick(RCChannel::B)) + " (" + String(rc.getPulseWidthUs(RCChannel::B)) + "us)" +
+    //     " D=" + String(rc.getJoystick(RCChannel::D)) + " (" + String(rc.getPulseWidthUs(RCChannel::D)) + "us)");
+    // printRcUpdateCadence();
     const int16_t longitudinalCommand = applyDeadzone(rc.getJoystick(RCChannel::A), kJoystickDeadzone);
     const int16_t lateralCommand = applyDeadzone(rc.getJoystick(RCChannel::B), kJoystickDeadzone);
     const int16_t rotationCommand = applyDeadzone(rc.getJoystick(RCChannel::D), kJoystickDeadzone);
@@ -355,10 +282,25 @@ void loop() {
     // const float rearLeftCommand = rearLeftSpeedController.update(rearLeftSetpoint, signedMeasuredSpeed(measuredSpeeds.rearLeft, rearLeftSetpoint), dtSeconds);
     // const float rearRightCommand = rearRightSpeedController.update(rearRightSetpoint, signedMeasuredSpeed(measuredSpeeds.rearRight, rearRightSetpoint), dtSeconds);
 
-    const float frontLeftCommand = frontLeftSetpoint;
-    const float frontRightCommand = frontRightSetpoint;
-    const float rearLeftCommand = rearLeftSetpoint;
-    const float rearRightCommand = rearRightSetpoint;
+    // We temporarily scale up by the time we fix the PID Speed regulator
+    constexpr uint8_t speedScalingFactor = 4;
+    constexpr uint8_t speedOffset = 0;
+    const float frontLeftCommand = frontLeftSetpoint * speedScalingFactor + speedOffset;
+    const float frontRightCommand = frontRightSetpoint * speedScalingFactor + speedOffset;
+    const float rearLeftCommand = rearLeftSetpoint * speedScalingFactor + speedOffset;
+    const float rearRightCommand = rearRightSetpoint * speedScalingFactor + speedOffset;
+
+    // Somehow, we need to scale the computed wheel commands. It shouldn't be the case so let's debug print some values over here
+    // Monitor.println("[DEBUG] Wheel commands before scaling: " +
+    //                 String(frontLeftCommand) + ", " +
+    //                 String(frontRightCommand) + ", " +
+    //                 String(rearLeftCommand) + ", " +
+    //                 String(rearRightCommand));
+    // Monitor.println("[DEBUG] Target wheel commands: " +
+    //                 String(targetWheelCommands.frontLeft) + ", " +
+    //                 String(targetWheelCommands.frontRight) + ", " +
+    //                 String(targetWheelCommands.rearLeft) + ", " +
+    //                 String(targetWheelCommands.rearRight));
 
     mecanumDriver.driveWheels(static_cast<int16_t>(frontLeftCommand), static_cast<int16_t>(frontRightCommand), static_cast<int16_t>(rearLeftCommand), static_cast<int16_t>(rearRightCommand));
 }
