@@ -1,6 +1,7 @@
 #include <Arduino_RouterBridge.h>
 #include <zephyr/kernel.h>
 
+#include "LiDAR/LiDARSensor.h"
 #include "PINS.h"
 #include "driver/FeedbackEncoder.h"
 #include "driver/MecanumDriver.h"
@@ -28,6 +29,7 @@ FeedbackEncoderPins encoderPins = {
     rearRightEncoderPins,
 };
 FeedbackEncoder encoders = FeedbackEncoder(encoderPins);
+LiDARSensor LiDAR;
 
 namespace {
 constexpr uint32_t kControlPeriodMs = 50;
@@ -230,6 +232,8 @@ void setup() {
     Monitor.println("===============================");
     Monitor.println("Starting up...");
     pinSetup();
+    Serial1.begin(LDS_LDROBOT_LD19::SERIAL_BAUD_RATE);
+    LiDAR.begin(Serial1);
     mecanumDriver.begin();
     rc.begin();
     encoders.begin();
@@ -242,12 +246,23 @@ void loop() {
     const uint32_t rcUpdateNowUs = micros();
     noteRcUpdateCadence(rcUpdateNowUs);
     rc.update();
+    LiDAR.update();
 
     const uint32_t nowMs = millis();
     const uint32_t elapsedMs = nowMs - lastControlUpdateMs;
     if (elapsedMs < kControlPeriodMs) return;
 
     lastControlUpdateMs = nowMs;
+
+    // Print the LiDAR distance for debugging purposes
+    const uint16_t distanceAt0Deg = LiDAR.readAngleAt(0);
+    const uint16_t distanceAt90Deg = LiDAR.readAngleAt(90);
+    // const uint16_t distanceAt180Deg = LiDAR.readAngleAt(180);    // Useless since we can't see backwards anyway
+    const uint16_t distanceAt270Deg = LiDAR.readAngleAt(270);
+    Monitor.println(String("[DEBUG] LiDAR distances (mm) at 0°=") + String(distanceAt0Deg) +
+                    " 90°=" + String(distanceAt90Deg) +
+                    // " 180°=" + String(distanceAt180Deg) +
+                    " 270°=" + String(distanceAt270Deg));
 
     const bool hasDriveSignal = rc.isSignalValid(RCChannel::A) && rc.isSignalValid(RCChannel::B) && rc.isSignalValid(RCChannel::D);
     if (!hasDriveSignal) {
