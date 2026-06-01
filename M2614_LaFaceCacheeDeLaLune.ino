@@ -254,15 +254,20 @@ void loop() {
 
     lastControlUpdateMs = nowMs;
 
-    // Print the LiDAR distance for debugging purposes
-    const uint16_t distanceAt0Deg = LiDAR.readAngleAt(0);
-    const uint16_t distanceAt90Deg = LiDAR.readAngleAt(90);
-    // const uint16_t distanceAt180Deg = LiDAR.readAngleAt(180);    // Useless since we can't see backwards anyway
-    const uint16_t distanceAt270Deg = LiDAR.readAngleAt(270);
-    Monitor.println(String("[DEBUG] LiDAR distances (mm) at 0°=") + String(distanceAt0Deg) +
-                    " 90°=" + String(distanceAt90Deg) +
-                    // " 180°=" + String(distanceAt180Deg) +
-                    " 270°=" + String(distanceAt270Deg));
+    // Print LiDAR query diagnostics at low control rate.
+    const LiDARSensor::QueryResult lidarAt0Deg = LiDAR.queryAngleAt(0);
+    const LiDARSensor::QueryResult lidarAt90Deg = LiDAR.queryAngleAt(90);
+    const LiDARSensor::QueryResult lidarAt270Deg = LiDAR.queryAngleAt(270);
+    // Monitor.println(
+    //     String("[DEBUG] LiDAR scan=") + String(LiDAR.getLastCommittedScanId()) +
+    //     " points=" + String(LiDAR.getLastValidPointCount()) +
+    //     " dropped=" + String(LiDAR.getDroppedScanCount()) +
+    //     " | 0°=" + String(lidarAt0Deg.distance_mm) + "@" + String(lidarAt0Deg.matched_angle_deg_x100 * 0.01f, 2) +
+    //     " | 90°=" + String(lidarAt90Deg.distance_mm) + "@" + String(lidarAt90Deg.matched_angle_deg_x100 * 0.01f, 2) +
+    //     " | 270°=" + String(lidarAt270Deg.distance_mm) + "@" + String(lidarAt270Deg.matched_angle_deg_x100 * 0.01f, 2));
+    Monitor.println("LiDAR distances | 0°=" + String(lidarAt0Deg.distance_mm) +
+                    "mm | 90°=" + String(lidarAt90Deg.distance_mm) +
+                    "mm | 270°=" + String(lidarAt270Deg.distance_mm) + "mm");
 
     const bool hasDriveSignal = rc.isSignalValid(RCChannel::A) && rc.isSignalValid(RCChannel::B) && rc.isSignalValid(RCChannel::D);
     if (!hasDriveSignal) {
