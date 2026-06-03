@@ -1,6 +1,8 @@
-// Necessary file for Arduino build system to recognize this as a valid sketch file. The actual logic is in the included driver source files.
+// Necessary file for Arduino build system to recognize these source files as part of the compilation process.
 #include "LiDAR/LDS_LDROBOT_LD19.cpp"
 #include "LiDAR/LiDARSensor.cpp"
+#include "debug/debug_print.cpp"
+#include "debug/test_sequences.cpp"
 #include "driver/FeedbackEncoder.cpp"
 #include "driver/MecanumDriver.cpp"
 #include "driver/RemoteController.cpp"
