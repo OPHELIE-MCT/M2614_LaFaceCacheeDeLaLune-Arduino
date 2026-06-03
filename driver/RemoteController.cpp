@@ -22,6 +22,7 @@ void RemoteController::begin() {
         channels_[i].wasHigh = false;
         channels_[i].sampledHigh = false;
         channels_[i].signalValid = false;
+        channels_[i].validPulseStreak = 0;
         channels_[i].startPulseTimestampUs = 0;
         channels_[i].lastRisingEdgeTimestampUs = 0;
         channels_[i].lastPulseTimestampUs = 0;
@@ -212,10 +213,14 @@ void RemoteController::updateChannel(ChannelState& state, uint32_t nowUs) {
         state.pulseWidthUs = clampPulse(static_cast<uint16_t>(state.rawPulseWidthUs));
         state.lastPulseTimestampUs = nowUs;
         ++state.fallingEdgeCount;
-        state.signalValid = true;
+        if (state.validPulseStreak < UINT8_MAX) {
+            ++state.validPulseStreak;
+        }
+        state.signalValid = state.validPulseStreak >= 2;
     } else if (!isHigh && state.startPulseTimestampUs != 0U && (nowUs - state.startPulseTimestampUs) > kSignalTimeoutUs) {
         state.pulseWidthUs = 0;
         state.signalValid = false;
+        state.validPulseStreak = 0;
     }
 
     state.wasHigh = isHigh;
@@ -227,6 +232,7 @@ void RemoteController::updateInterruptDrivenChannel(uint8_t channelIndex, uint32
     if (state.startPulseTimestampUs != 0U && (nowUs - state.startPulseTimestampUs) > kSignalTimeoutUs) {
         state.pulseWidthUs = 0;
         state.signalValid = false;
+        state.validPulseStreak = 0;
     }
     interrupts();
 }
@@ -250,7 +256,10 @@ void RemoteController::onInterrupt(uint8_t channelIndex) {
         state.pulseWidthUs = clampPulse(static_cast<uint16_t>(state.rawPulseWidthUs));
         state.lastPulseTimestampUs = nowUs;
         ++state.fallingEdgeCount;
-        state.signalValid = true;
+        if (state.validPulseStreak < UINT8_MAX) {
+            ++state.validPulseStreak;
+        }
+        state.signalValid = state.validPulseStreak >= 2;
     }
 
     state.wasHigh = isHigh;

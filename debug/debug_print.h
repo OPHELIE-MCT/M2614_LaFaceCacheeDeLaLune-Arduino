@@ -48,6 +48,21 @@ void printLidarDistances(
     const LiDARSensor::QueryResult& lidarAt270Deg);
 
 /**
+ * @brief Print a detailed LiDAR scan summary, including scan counters and matched angles.
+ * @param lidar Current LiDAR sensor instance.
+ * @param lidarAt0Deg Result of the LiDAR query at 0 degrees.
+ * @param lidarAt90Deg Result of the LiDAR query at 90 degrees.
+ * @param lidarAt270Deg Result of the LiDAR query at 270 degrees.
+ * @author GitHub Copilot
+ * @date 2026-06-03
+ */
+void printDetailedLidarDistances(
+    const LiDARSensor& lidar,
+    const LiDARSensor::QueryResult& lidarAt0Deg,
+    const LiDARSensor::QueryResult& lidarAt90Deg,
+    const LiDARSensor::QueryResult& lidarAt270Deg);
+
+/**
  * @brief Print the RC drive-channel joystick values and pulse widths.
  * @param rc Remote controller instance used for the snapshot.
  * @author GitHub Copilot

@@ -113,6 +113,20 @@ void printLidarDistances(
         "mm | 270°=" + String(lidarAt270Deg.distance_mm) + "mm");
 }
 
+void printDetailedLidarDistances(
+    const LiDARSensor& lidar,
+    const LiDARSensor::QueryResult& lidarAt0Deg,
+    const LiDARSensor::QueryResult& lidarAt90Deg,
+    const LiDARSensor::QueryResult& lidarAt270Deg) {
+    Monitor.println(
+        String("[DEBUG] LiDAR scan=") + String(lidar.getLastCommittedScanId()) +
+        " points=" + String(lidar.getLastValidPointCount()) +
+        " dropped=" + String(lidar.getDroppedScanCount()) +
+        " | 0°=" + String(lidarAt0Deg.distance_mm) + "@" + String(lidarAt0Deg.matched_angle_deg_x100 * 0.01f, 2) +
+        " | 90°=" + String(lidarAt90Deg.distance_mm) + "@" + String(lidarAt90Deg.matched_angle_deg_x100 * 0.01f, 2) +
+        " | 270°=" + String(lidarAt270Deg.distance_mm) + "@" + String(lidarAt270Deg.matched_angle_deg_x100 * 0.01f, 2));
+}
+
 void printDriveRcSnapshot(const RemoteController& rc) {
     Monitor.println(
         String("[DEBUG] RC A=") + String(rc.getJoystick(RCChannel::A)) + " (" + String(rc.getPulseWidthUs(RCChannel::A)) + "us)" +

@@ -46,7 +46,7 @@ LiDARSensor::QueryResult LiDARSensor::queryAngleAt(uint16_t angleInDegrees) cons
         false,
         angleInDegrees,
         0U,
-        0,
+        -1,
         kNoDistance,
         0U,
         committed_scan_id_,

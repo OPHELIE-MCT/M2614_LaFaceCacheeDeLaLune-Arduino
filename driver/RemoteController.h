@@ -218,6 +218,7 @@ class RemoteController {
         bool wasHigh = false;
         bool sampledHigh = false;
         bool signalValid = false;
+        uint8_t validPulseStreak = 0;
         uint32_t startPulseTimestampUs = 0;
         uint32_t lastRisingEdgeTimestampUs = 0;
         uint32_t lastPulseTimestampUs = 0;
