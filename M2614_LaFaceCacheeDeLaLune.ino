@@ -1,14 +1,10 @@
 #include <Arduino_RouterBridge.h>
-#include <zephyr/kernel.h>
 
 #include "LiDAR/LiDARSensor.h"
 #include "PINS.h"
 #include "debug/debug_print.h"
-#include "debug/test_sequences.h"
-#include "driver/FeedbackEncoder.h"
 #include "driver/MecanumDriver.h"
 #include "driver/RemoteController.h"
-#include "driver/SpeedController.h"
 
 MotorPinConfig frontLeftPins = {FL_IN1, FL_IN2, FL_EN};
 MotorPinConfig frontRightPins = {FR_IN1, FR_IN2, FR_EN};
@@ -20,17 +16,6 @@ MecanumDriver mecanumDriver = MecanumDriver(mecanumPins);
 RCReceiverPins rcPins = {RC_PIN_A, RC_PIN_B, RC_PIN_C, RC_PIN_D, RC_PIN_E, RC_PIN_F, RC_PIN_G, RC_PIN_H};
 RemoteController rc = RemoteController(rcPins);
 
-EncoderChannelPins frontLeftEncoderPins = {FL_ENC_A, FL_ENC_B};
-EncoderChannelPins frontRightEncoderPins = {FR_ENC_A, FR_ENC_B};
-EncoderChannelPins rearLeftEncoderPins = {BL_ENC_A, BL_ENC_B};
-EncoderChannelPins rearRightEncoderPins = {BR_ENC_A, BR_ENC_B};
-FeedbackEncoderPins encoderPins = {
-    frontLeftEncoderPins,
-    frontRightEncoderPins,
-    rearLeftEncoderPins,
-    rearRightEncoderPins,
-};
-FeedbackEncoder encoders = FeedbackEncoder(encoderPins);
 LiDARSensor LiDAR;
 
 enum ControlState {
@@ -53,12 +38,8 @@ ControlState CURRENT_STATE = ControlState::MANUAL_CONTROL;
 AutoControlState AUTO_STATE = AutoControlState::SLOW_FORWARD;
 
 uint8_t stopCounter = 0;
-namespace {
-constexpr uint32_t kControlPeriodMs = 150;
-constexpr uint32_t kAutoSwitchLogPeriodMs = 250;
+constexpr uint32_t kDebugPrintDelayMs = 200;
 constexpr uint32_t kRcSignalLossDebounceMs = 250;
-constexpr float kDefaultDtSeconds = 0.05f;
-constexpr float kMaxSpeedPulsesPerPeriod = 80.0f;
 constexpr int16_t kJoystickDeadzone = 30;
 constexpr uint16_t kButtonPressThresholdUs = 1850;
 
@@ -69,43 +50,6 @@ int16_t applyDeadzone(int16_t value, int16_t deadzone) {
     return (value > -deadzone && value < deadzone) ? 0 : value;
 }
 
-float wheelCommandToSpeedSetpoint(int16_t wheelCommand) {
-    return (static_cast<float>(wheelCommand) / 500.0f) * kMaxSpeedPulsesPerPeriod;
-}
-
-float signedMeasuredSpeed(int32_t rawPulseCount, float setpoint) {
-    if (setpoint > 0.0f) {
-        return static_cast<float>(rawPulseCount);
-    }
-    if (setpoint < 0.0f) {
-        return static_cast<float>(-rawPulseCount);
-    }
-    return 0.0f;
-}
-
-// void resetSpeedControllers(SpeedController& frontLeft, SpeedController& frontRight, SpeedController& rearLeft, SpeedController& rearRight) {
-//     frontLeft.reset();
-//     frontRight.reset();
-//     rearLeft.reset();
-//     rearRight.reset();
-// }
-}  // namespace
-
-// SpeedControllerConfig speedControllerConfig = {
-//     .kp = 6.0f,
-//     .ki = 0.5f,
-//     .kd = 0.0f,
-//     .integralMin = -400.0f,
-//     .integralMax = 400.0f,
-//     .outputMin = -500.0f,
-//     .outputMax = 500.0f,
-// };
-//
-// PIDSpeedController frontLeftSpeedController(speedControllerConfig);
-// PIDSpeedController frontRightSpeedController(speedControllerConfig);
-// PIDSpeedController rearLeftSpeedController(speedControllerConfig);
-// PIDSpeedController rearRightSpeedController(speedControllerConfig);
-
 void setup() {
     Monitor.begin();
     Monitor.println("===============================");
@@ -115,14 +59,11 @@ void setup() {
     LiDAR.begin(Serial1);
     mecanumDriver.begin();
     rc.begin();
-    encoders.begin();
     lastControlUpdateMs = millis();
     Monitor.println("Setup complete.");
 }
 
 void loop() {
-    // const uint32_t rcUpdateNowUs = micros();
-    // debug_print::noteRcUpdateCadence(rcUpdateNowUs);
     rc.update();
     LiDAR.update();
 
@@ -184,24 +125,6 @@ void loop() {
             const bool isAutoSwitchPressed = hasAutoSwitchSignal && rc.getButton(RCChannel::E, kButtonPressThresholdUs) && rc.getButton(RCChannel::F, kButtonPressThresholdUs);
             const uint16_t pulseE = rc.getPulseWidthUs(RCChannel::E);
             const uint16_t pulseF = rc.getPulseWidthUs(RCChannel::F);
-
-            // if ((nowMs - lastAutoSwitchLogMs) >= kAutoSwitchLogPeriodMs) {
-            //     lastAutoSwitchLogMs = nowMs;
-            //     Monitor.print("AUTO_SWITCH E_valid=");
-            //     Monitor.print(rc.isSignalValid(RCChannel::E));
-            //     Monitor.print(" F_valid=");
-            //     Monitor.print(rc.isSignalValid(RCChannel::F));
-            //     Monitor.print(" E_us=");
-            //     Monitor.print(pulseE);
-            //     Monitor.print(" F_us=");
-            //     Monitor.print(pulseF);
-            //     Monitor.print(" thresh=");
-            //     Monitor.print(kButtonPressThresholdUs);
-            //     Monitor.print(" pressed=");
-            //     Monitor.print(isAutoSwitchPressed);
-            //     Monitor.print(" edge=");
-            //     Monitor.println(isAutoSwitchPressed && !wasAutoSwitchPressed);
-            // }
 
             if (isAutoSwitchPressed && !wasAutoSwitchPressed) {
                 CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
@@ -285,25 +208,10 @@ void loop() {
         case ControlState::CONNECTION_LOST:
             // We should never reach this case due to the hasDriveSignal check above, but we include it for completeness.
             mecanumDriver.stop();
-            // resetSpeedControllers(frontLeftSpeedController, frontRightSpeedController, rearLeftSpeedController, rearRightSpeedController);
             return;
     }
 
     const MecanumDriver::WheelCommands targetWheelCommands = MecanumDriver::mix(lateralCommand, longitudinalCommand, rotationCommand);
-
-    // const float frontLeftSetpoint = wheelCommandToSpeedSetpoint(targetWheelCommands.frontLeft);
-    // const float frontRightSetpoint = wheelCommandToSpeedSetpoint(targetWheelCommands.frontRight);
-    // const float rearLeftSetpoint = wheelCommandToSpeedSetpoint(targetWheelCommands.rearLeft);
-    // const float rearRightSetpoint = wheelCommandToSpeedSetpoint(targetWheelCommands.rearRight);
-
-    // const EncoderSpeedSnapshot measuredSpeeds = encoders.getCurrentSpeed();
-
-    // const float dtSeconds = (elapsedMs > 0U) ? (static_cast<float>(elapsedMs) / 1000.0f) : kDefaultDtSeconds;
-
-    // const float frontLeftCommand = frontLeftSpeedController.update(frontLeftSetpoint, signedMeasuredSpeed(measuredSpeeds.frontLeft, frontLeftSetpoint), dtSeconds);
-    // const float frontRightCommand = frontRightSpeedController.update(frontRightSetpoint, signedMeasuredSpeed(measuredSpeeds.frontRight, frontRightSetpoint), dtSeconds);
-    // const float rearLeftCommand = rearLeftSpeedController.update(rearLeftSetpoint, signedMeasuredSpeed(measuredSpeeds.rearLeft, rearLeftSetpoint), dtSeconds);
-    // const float rearRightCommand = rearRightSpeedController.update(rearRightSetpoint, signedMeasuredSpeed(measuredSpeeds.rearRight, rearRightSetpoint), dtSeconds);
 
     float frontLeftCommand = static_cast<float>(targetWheelCommands.frontLeft);
     float frontRightCommand = static_cast<float>(targetWheelCommands.frontRight);
@@ -320,7 +228,7 @@ void loop() {
     mecanumDriver.driveWheels(static_cast<int16_t>(frontLeftCommand), static_cast<int16_t>(frontRightCommand), static_cast<int16_t>(rearLeftCommand), static_cast<int16_t>(rearRightCommand));
 
     // ===== DEBUG PRINT ZONE =====
-    if (elapsedMs < kControlPeriodMs) return;
+    if (elapsedMs < kDebugPrintDelayMs) return;
     lastControlUpdateMs = nowMs;
     // debug_print::printDetailedLidarDistances(LiDAR, lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
     debug_print::printLidarDistances(lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
