@@ -40,26 +40,21 @@ enum ControlState {
 };
 
 enum AutoControlState {
-    FORWARD1,
-    TURN1,
-    FORWARD2,
-    TURN2,
-    FORWARD3,
-    TURN3,
-    FORWARD4,
-    TURN4,
-    FORWARD5,
-    TURN5,
-    FORWARD6,
-    TURN6,
-    POSITIONNING,
-    COMPLETED
+    SLOW_FORWARD,
+    STOP,
+    TURN,
+    REPOSITION,
+    SLOW_FORWARD_2,
+    EXIT_TURN,
+    EXIT_FORWARD
 };
 
 ControlState CURRENT_STATE = ControlState::MANUAL_CONTROL;
-AutoControlState AUTO_STATE = FORWARD1;
+AutoControlState AUTO_STATE = AutoControlState::SLOW_FORWARD;
+
+uint8_t stopCounter = 0;
 namespace {
-constexpr uint32_t kControlPeriodMs = 50;
+constexpr uint32_t kControlPeriodMs = 150;
 constexpr uint32_t kAutoSwitchLogPeriodMs = 250;
 constexpr uint32_t kRcSignalLossDebounceMs = 250;
 constexpr float kDefaultDtSeconds = 0.05f;
@@ -148,6 +143,10 @@ void loop() {
     LiDARSensor::QueryResult lidarAt90Deg = defaultQueryResult;
     LiDARSensor::QueryResult lidarAt270Deg = defaultQueryResult;
 
+    lidarAt0Deg = LiDAR.queryAngleAt(0);
+    lidarAt90Deg = LiDAR.queryAngleAt(90);
+    lidarAt270Deg = LiDAR.queryAngleAt(270);
+
     const bool hasDriveSignal = rc.isSignalValid(RCChannel::A) && rc.isSignalValid(RCChannel::B) && rc.isSignalValid(RCChannel::D);
     if (hasDriveSignal) {
         driveSignalInvalidSinceMs = 0;
@@ -186,65 +185,102 @@ void loop() {
             const uint16_t pulseE = rc.getPulseWidthUs(RCChannel::E);
             const uint16_t pulseF = rc.getPulseWidthUs(RCChannel::F);
 
-            if ((nowMs - lastAutoSwitchLogMs) >= kAutoSwitchLogPeriodMs) {
-                lastAutoSwitchLogMs = nowMs;
-                Monitor.print("AUTO_SWITCH E_valid=");
-                Monitor.print(rc.isSignalValid(RCChannel::E));
-                Monitor.print(" F_valid=");
-                Monitor.print(rc.isSignalValid(RCChannel::F));
-                Monitor.print(" E_us=");
-                Monitor.print(pulseE);
-                Monitor.print(" F_us=");
-                Monitor.print(pulseF);
-                Monitor.print(" thresh=");
-                Monitor.print(kButtonPressThresholdUs);
-                Monitor.print(" pressed=");
-                Monitor.print(isAutoSwitchPressed);
-                Monitor.print(" edge=");
-                Monitor.println(isAutoSwitchPressed && !wasAutoSwitchPressed);
-            }
+            // if ((nowMs - lastAutoSwitchLogMs) >= kAutoSwitchLogPeriodMs) {
+            //     lastAutoSwitchLogMs = nowMs;
+            //     Monitor.print("AUTO_SWITCH E_valid=");
+            //     Monitor.print(rc.isSignalValid(RCChannel::E));
+            //     Monitor.print(" F_valid=");
+            //     Monitor.print(rc.isSignalValid(RCChannel::F));
+            //     Monitor.print(" E_us=");
+            //     Monitor.print(pulseE);
+            //     Monitor.print(" F_us=");
+            //     Monitor.print(pulseF);
+            //     Monitor.print(" thresh=");
+            //     Monitor.print(kButtonPressThresholdUs);
+            //     Monitor.print(" pressed=");
+            //     Monitor.print(isAutoSwitchPressed);
+            //     Monitor.print(" edge=");
+            //     Monitor.println(isAutoSwitchPressed && !wasAutoSwitchPressed);
+            // }
 
             if (isAutoSwitchPressed && !wasAutoSwitchPressed) {
                 CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
-                AUTO_STATE = FORWARD1;
+                AUTO_STATE = AutoControlState::SLOW_FORWARD;
                 Monitor.println("=============== SWITCHING TO AUTOMATIC CONTROL MODE ===============");
             }
             wasAutoSwitchPressed = isAutoSwitchPressed;
             break;
         }
         case ControlState::AUTOMATIC_CONTROL:
-            lidarAt0Deg = LiDAR.queryAngleAt(0);
-            lidarAt90Deg = LiDAR.queryAngleAt(90);
-            lidarAt270Deg = LiDAR.queryAngleAt(270);
 
             switch (AUTO_STATE) {
-                case FORWARD1:
-                    longitudinalCommand = 150;
-                    if (lidarAt90Deg.distance_mm > lidarAt270Deg.distance_mm * 2) longitudinalCommand = 75;
-                    if (lidarAt0Deg.distance_mm <= lidarAt270Deg.distance_mm) {
-                        AUTO_STATE = TURN1;
-                        Monitor.print("[DEBUG] Transitioning to TURN1: lidarAt0Deg.distance_mm=");
-                        Monitor.print(lidarAt0Deg.distance_mm);
-                        Monitor.print(" lidarAt270Deg.distance_mm=");
-                        Monitor.println(lidarAt270Deg.distance_mm);
+                case AutoControlState::SLOW_FORWARD:
+                    longitudinalCommand = 100;
+                    lateralCommand = 25;
+                    if (lidarAt0Deg.distance_mm < 25) {
+                        AUTO_STATE = AutoControlState::TURN;
+                        stopCounter = 0;
+                        Monitor.println("[DEBUG] Transitioning to TURN: Obstacle detected at 0° within 25mm");
                     }
                     break;
-                case TURN1:
-                    rotationCommand = 200;
-                    if (lidarAt0Deg.distance_mm > lidarAt270Deg.distance_mm * 4) {
-                        AUTO_STATE = COMPLETED;
-                        Monitor.print("[DEBUG] Transitioning to COMPLETED: lidarAt0Deg.distance_mm=");
-                        Monitor.print(lidarAt0Deg.distance_mm);
-                        Monitor.print(" lidarAt270Deg.distance_mm=");
-                        Monitor.println(lidarAt270Deg.distance_mm);
+                case AutoControlState::TURN:
+                    longitudinalCommand = 0;
+                    lateralCommand = 0;
+                    rotationCommand = -150;
+                    if (lidarAt0Deg.distance_mm > 430) {
+                        AUTO_STATE = AutoControlState::REPOSITION;
+                        Monitor.println("[DEBUG] Transitioning to REPOSITION: Path ahead at 0° is clear beyond 430mm");
                     }
                     break;
-
-                case COMPLETED:
+                case AutoControlState::REPOSITION:
+                    longitudinalCommand = 0;
+                    lateralCommand = 225;
+                    rotationCommand = 0;
+                    // Do that for 3 seconds, then stop
+                    static uint32_t repositionStartMs = 0;
+                    if (repositionStartMs == 0U) {
+                        repositionStartMs = nowMs;
+                    }
+                    if ((nowMs - repositionStartMs) >= 3000) {
+                        AUTO_STATE = AutoControlState::SLOW_FORWARD_2;
+                        repositionStartMs = 0U;
+                        Monitor.println("[DEBUG] Transitioning to SLOW_FORWARD_2: Completed repositioning maneuver");
+                    }
+                    break;
+                case AutoControlState::SLOW_FORWARD_2:
+                    longitudinalCommand = 100;
+                    lateralCommand = 2;
+                    rotationCommand = 0;
+                    if (lidarAt0Deg.distance_mm < 25) {
+                        AUTO_STATE = AutoControlState::EXIT_TURN;
+                        stopCounter = 0;
+                        Monitor.println("[DEBUG] Transitioning to EXIT_TURN: Obstacle detected at 0° within 25mm");
+                    }
+                    break;
+                case AutoControlState::EXIT_TURN:
+                    longitudinalCommand = 0;
+                    lateralCommand = 0;
+                    rotationCommand = -150;
+                    if (lidarAt0Deg.distance_mm > 2000) {
+                        AUTO_STATE = AutoControlState::EXIT_FORWARD;
+                        Monitor.println("[DEBUG] Transitioning to EXIT_FORWARD: Path ahead at 0° is clear beyond 2000mm");
+                    }
+                    break;
+                case AutoControlState::EXIT_FORWARD:
+                    longitudinalCommand = 250;
+                    lateralCommand = 0;
+                    rotationCommand = 0;
+                    if (lidarAt0Deg.distance_mm < 350) {
+                        AUTO_STATE = AutoControlState::STOP;
+                        Monitor.println("[DEBUG] Transitioning to STOP: Obstacle detected at 0° within 250mm");
+                    }
+                    break;
+                case AutoControlState::STOP:
                     mecanumDriver.stop();
+                    CURRENT_STATE = ControlState::MANUAL_CONTROL;
+                    Monitor.println("=============== SWITCHING TO MANUAL CONTROL MODE ===============");
                     break;
             }
-
             break;
         case ControlState::CONNECTION_LOST:
             // We should never reach this case due to the hasDriveSignal check above, but we include it for completeness.
@@ -287,5 +323,5 @@ void loop() {
     if (elapsedMs < kControlPeriodMs) return;
     lastControlUpdateMs = nowMs;
     // debug_print::printDetailedLidarDistances(LiDAR, lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
-    // debug_print::printLidarDistances(lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
+    debug_print::printLidarDistances(lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
 }
