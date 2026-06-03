@@ -39,17 +39,36 @@ enum ControlState {
     CONNECTION_LOST
 };
 
-ControlState CURRENT_STATE = ControlState::MANUAL_CONTROL;
+enum AutoControlState {
+    FORWARD1,
+    TURN1,
+    FORWARD2,
+    TURN2,
+    FORWARD3,
+    TURN3,
+    FORWARD4,
+    TURN4,
+    FORWARD5,
+    TURN5,
+    FORWARD6,
+    TURN6,
+    POSITIONNING,
+    COMPLETED
+};
 
+ControlState CURRENT_STATE = ControlState::MANUAL_CONTROL;
+AutoControlState AUTO_STATE = FORWARD1;
 namespace {
 constexpr uint32_t kControlPeriodMs = 50;
 constexpr uint32_t kAutoSwitchLogPeriodMs = 250;
+constexpr uint32_t kRcSignalLossDebounceMs = 250;
 constexpr float kDefaultDtSeconds = 0.05f;
 constexpr float kMaxSpeedPulsesPerPeriod = 80.0f;
 constexpr int16_t kJoystickDeadzone = 30;
 constexpr uint16_t kButtonPressThresholdUs = 1850;
 
 uint32_t lastControlUpdateMs = 0;
+uint32_t driveSignalInvalidSinceMs = 0;
 
 int16_t applyDeadzone(int16_t value, int16_t deadzone) {
     return (value > -deadzone && value < deadzone) ? 0 : value;
@@ -130,12 +149,22 @@ void loop() {
     LiDARSensor::QueryResult lidarAt270Deg = defaultQueryResult;
 
     const bool hasDriveSignal = rc.isSignalValid(RCChannel::A) && rc.isSignalValid(RCChannel::B) && rc.isSignalValid(RCChannel::D);
-    if (!hasDriveSignal) {
-        CURRENT_STATE = ControlState::CONNECTION_LOST;
-        Monitor.println("=============== RC SIGNAL LOST ===============");
-    } else if (CURRENT_STATE == ControlState::CONNECTION_LOST) {
-        CURRENT_STATE = ControlState::MANUAL_CONTROL;
-        Monitor.println("=============== RC SIGNAL RESTORED ===============");
+    if (hasDriveSignal) {
+        driveSignalInvalidSinceMs = 0;
+        if (CURRENT_STATE == ControlState::CONNECTION_LOST) {
+            CURRENT_STATE = ControlState::MANUAL_CONTROL;
+            Monitor.println("=============== RC SIGNAL RESTORED ===============");
+        }
+    } else {
+        if (driveSignalInvalidSinceMs == 0U) {
+            driveSignalInvalidSinceMs = nowMs;
+        }
+
+        const bool lossDebounceElapsed = (nowMs - driveSignalInvalidSinceMs) >= kRcSignalLossDebounceMs;
+        if (lossDebounceElapsed && CURRENT_STATE != ControlState::CONNECTION_LOST) {
+            CURRENT_STATE = ControlState::CONNECTION_LOST;
+            Monitor.println("=============== RC SIGNAL LOST ===============");
+        }
     }
 
     int16_t longitudinalCommand = 0;
@@ -177,6 +206,7 @@ void loop() {
 
             if (isAutoSwitchPressed && !wasAutoSwitchPressed) {
                 CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
+                AUTO_STATE = FORWARD1;
                 Monitor.println("=============== SWITCHING TO AUTOMATIC CONTROL MODE ===============");
             }
             wasAutoSwitchPressed = isAutoSwitchPressed;
@@ -187,30 +217,12 @@ void loop() {
             lidarAt90Deg = LiDAR.queryAngleAt(90);
             lidarAt270Deg = LiDAR.queryAngleAt(270);
 
-            enum AutoControlState {
-                FORWARD1,
-                TURN1,
-                FORWARD2,
-                TURN2,
-                FORWARD3,
-                TURN3,
-                FORWARD4,
-                TURN4,
-                FORWARD5,
-                TURN5,
-                FORWARD6,
-                TURN6,
-                POSITIONNING,
-                COMPLETED
-            };
-
-            static AutoControlState autoState = FORWARD1;
-            switch (autoState) {
+            switch (AUTO_STATE) {
                 case FORWARD1:
-                    longitudinalCommand = 300;
-                    if (lidarAt90Deg.distance_mm > lidarAt270Deg.distance_mm * 2) longitudinalCommand = 150;
+                    longitudinalCommand = 150;
+                    if (lidarAt90Deg.distance_mm > lidarAt270Deg.distance_mm * 2) longitudinalCommand = 75;
                     if (lidarAt0Deg.distance_mm <= lidarAt270Deg.distance_mm) {
-                        autoState = TURN1;
+                        AUTO_STATE = TURN1;
                         Monitor.print("[DEBUG] Transitioning to TURN1: lidarAt0Deg.distance_mm=");
                         Monitor.print(lidarAt0Deg.distance_mm);
                         Monitor.print(" lidarAt270Deg.distance_mm=");
@@ -220,7 +232,7 @@ void loop() {
                 case TURN1:
                     rotationCommand = 200;
                     if (lidarAt0Deg.distance_mm > lidarAt270Deg.distance_mm * 4) {
-                        autoState = COMPLETED;
+                        AUTO_STATE = COMPLETED;
                         Monitor.print("[DEBUG] Transitioning to COMPLETED: lidarAt0Deg.distance_mm=");
                         Monitor.print(lidarAt0Deg.distance_mm);
                         Monitor.print(" lidarAt270Deg.distance_mm=");
