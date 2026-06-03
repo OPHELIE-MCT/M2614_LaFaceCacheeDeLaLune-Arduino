@@ -43,9 +43,11 @@ ControlState CURRENT_STATE = ControlState::MANUAL_CONTROL;
 
 namespace {
 constexpr uint32_t kControlPeriodMs = 50;
+constexpr uint32_t kAutoSwitchLogPeriodMs = 250;
 constexpr float kDefaultDtSeconds = 0.05f;
 constexpr float kMaxSpeedPulsesPerPeriod = 80.0f;
 constexpr int16_t kJoystickDeadzone = 30;
+constexpr uint16_t kButtonPressThresholdUs = 1850;
 
 uint32_t lastControlUpdateMs = 0;
 
@@ -141,18 +143,45 @@ void loop() {
     int16_t rotationCommand = 0;
 
     switch (CURRENT_STATE) {
-        case ControlState::MANUAL_CONTROL:
+        case ControlState::MANUAL_CONTROL: {
             // In manual control, we directly map RC joystick commands to mecanum drive.
             longitudinalCommand = applyDeadzone(rc.getJoystick(RCChannel::A), kJoystickDeadzone);
             lateralCommand = applyDeadzone(rc.getJoystick(RCChannel::B), kJoystickDeadzone);
             rotationCommand = applyDeadzone(rc.getJoystick(RCChannel::D), kJoystickDeadzone);
 
             // If we press both joystick buttons, we switch to automatic control mode.
-            if (rc.getButton(RCChannel::E) && rc.getButton(RCChannel::F)) {
+            static bool wasAutoSwitchPressed = false;
+            static uint32_t lastAutoSwitchLogMs = 0;
+            const bool hasAutoSwitchSignal = rc.isSignalValid(RCChannel::E) && rc.isSignalValid(RCChannel::F);
+            const bool isAutoSwitchPressed = hasAutoSwitchSignal && rc.getButton(RCChannel::E, kButtonPressThresholdUs) && rc.getButton(RCChannel::F, kButtonPressThresholdUs);
+            const uint16_t pulseE = rc.getPulseWidthUs(RCChannel::E);
+            const uint16_t pulseF = rc.getPulseWidthUs(RCChannel::F);
+
+            if ((nowMs - lastAutoSwitchLogMs) >= kAutoSwitchLogPeriodMs) {
+                lastAutoSwitchLogMs = nowMs;
+                Monitor.print("AUTO_SWITCH E_valid=");
+                Monitor.print(rc.isSignalValid(RCChannel::E));
+                Monitor.print(" F_valid=");
+                Monitor.print(rc.isSignalValid(RCChannel::F));
+                Monitor.print(" E_us=");
+                Monitor.print(pulseE);
+                Monitor.print(" F_us=");
+                Monitor.print(pulseF);
+                Monitor.print(" thresh=");
+                Monitor.print(kButtonPressThresholdUs);
+                Monitor.print(" pressed=");
+                Monitor.print(isAutoSwitchPressed);
+                Monitor.print(" edge=");
+                Monitor.println(isAutoSwitchPressed && !wasAutoSwitchPressed);
+            }
+
+            if (isAutoSwitchPressed && !wasAutoSwitchPressed) {
                 CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
                 Monitor.println("=============== SWITCHING TO AUTOMATIC CONTROL MODE ===============");
             }
+            wasAutoSwitchPressed = isAutoSwitchPressed;
             break;
+        }
         case ControlState::AUTOMATIC_CONTROL:
             lidarAt0Deg = LiDAR.queryAngleAt(0);
             lidarAt90Deg = LiDAR.queryAngleAt(90);
@@ -182,12 +211,20 @@ void loop() {
                     if (lidarAt90Deg.distance_mm > lidarAt270Deg.distance_mm * 2) longitudinalCommand = 150;
                     if (lidarAt0Deg.distance_mm <= lidarAt270Deg.distance_mm) {
                         autoState = TURN1;
+                        Monitor.print("[DEBUG] Transitioning to TURN1: lidarAt0Deg.distance_mm=");
+                        Monitor.print(lidarAt0Deg.distance_mm);
+                        Monitor.print(" lidarAt270Deg.distance_mm=");
+                        Monitor.println(lidarAt270Deg.distance_mm);
                     }
                     break;
                 case TURN1:
                     rotationCommand = 200;
                     if (lidarAt0Deg.distance_mm > lidarAt270Deg.distance_mm * 4) {
                         autoState = COMPLETED;
+                        Monitor.print("[DEBUG] Transitioning to COMPLETED: lidarAt0Deg.distance_mm=");
+                        Monitor.print(lidarAt0Deg.distance_mm);
+                        Monitor.print(" lidarAt270Deg.distance_mm=");
+                        Monitor.println(lidarAt270Deg.distance_mm);
                     }
                     break;
 
@@ -238,5 +275,5 @@ void loop() {
     if (elapsedMs < kControlPeriodMs) return;
     lastControlUpdateMs = nowMs;
     // debug_print::printDetailedLidarDistances(LiDAR, lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
-    debug_print::printLidarDistances(lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
+    // debug_print::printLidarDistances(lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
 }
