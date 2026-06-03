@@ -7,3 +7,4 @@
 #include "driver/MecanumDriver.cpp"
 #include "driver/RemoteController.cpp"
 #include "driver/SpeedController.cpp"
+#include "driver/ToFDistanceSensor.cpp"

@@ -127,6 +127,15 @@ void printDetailedLidarDistances(
         " | 270°=" + String(lidarAt270Deg.distance_mm) + "@" + String(lidarAt270Deg.matched_angle_deg_x100 * 0.01f, 2));
 }
 
+void printTofMeasurement(const ToFDistanceMeasurement& measurement, uint8_t statusCode, float thresholdMm) {
+    Monitor.println(
+        String("ToF distance | value=") + String(measurement.distanceMm, 1) +
+        "mm | valid=" + String(measurement.isValid ? 1 : 0) +
+        " | status=0x" + String(statusCode, HEX) +
+        " | threshold=" + String(thresholdMm, 1) +
+        "mm | reached=" + String(measurement.isThresholdReached ? 1 : 0));
+}
+
 void printDriveRcSnapshot(const RemoteController& rc) {
     Monitor.println(
         String("[DEBUG] RC A=") + String(rc.getJoystick(RCChannel::A)) + " (" + String(rc.getPulseWidthUs(RCChannel::A)) + "us)" +

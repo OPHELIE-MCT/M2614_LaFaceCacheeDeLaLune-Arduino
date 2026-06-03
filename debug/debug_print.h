@@ -5,6 +5,7 @@
 #include "../LiDAR/LiDARSensor.h"
 #include "../driver/MecanumDriver.h"
 #include "../driver/RemoteController.h"
+#include "../driver/ToFDistanceSensor.h"
 
 namespace debug_print {
 
@@ -61,6 +62,16 @@ void printDetailedLidarDistances(
     const LiDARSensor::QueryResult& lidarAt0Deg,
     const LiDARSensor::QueryResult& lidarAt90Deg,
     const LiDARSensor::QueryResult& lidarAt270Deg);
+
+/**
+ * @brief Print the latest ToF measurement used for stop-threshold calibration.
+ * @param measurement Latest ToF polling snapshot.
+ * @param statusCode VL6180X status code from the latest poll.
+ * @param thresholdMm Threshold configured for the sensor wrapper.
+ * @author GitHub Copilot
+ * @date 2026-06-03
+ */
+void printTofMeasurement(const ToFDistanceMeasurement& measurement, uint8_t statusCode, float thresholdMm);
 
 /**
  * @brief Print the RC drive-channel joystick values and pulse widths.

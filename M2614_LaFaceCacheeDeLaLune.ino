@@ -5,6 +5,7 @@
 #include "debug/debug_print.h"
 #include "driver/MecanumDriver.h"
 #include "driver/RemoteController.h"
+#include "driver/ToFDistanceSensor.h"
 
 MotorPinConfig frontLeftPins = {FL_IN1, FL_IN2, FL_EN};
 MotorPinConfig frontRightPins = {FR_IN1, FR_IN2, FR_EN};
@@ -17,6 +18,7 @@ RCReceiverPins rcPins = {RC_PIN_A, RC_PIN_B, RC_PIN_C, RC_PIN_D, RC_PIN_E, RC_PI
 RemoteController rc = RemoteController(rcPins);
 
 LiDARSensor LiDAR;
+ToFDistanceSensor tofDistanceSensor;
 
 enum ControlState {
     MANUAL_CONTROL,
@@ -42,6 +44,7 @@ constexpr uint32_t kDebugPrintDelayMs = 200;
 constexpr uint32_t kRcSignalLossDebounceMs = 250;
 constexpr int16_t kJoystickDeadzone = 30;
 constexpr uint16_t kButtonPressThresholdUs = 1850;
+constexpr float kToFStopThresholdMm = ToFDistanceSensor::kDefaultThresholdMm;
 
 uint32_t lastControlUpdateMs = 0;
 uint32_t driveSignalInvalidSinceMs = 0;
@@ -55,17 +58,20 @@ void setup() {
     Monitor.println("===============================");
     Monitor.println("Starting up...");
     pinSetup();
+    const bool tofStarted = tofDistanceSensor.begin(Wire1, kToFStopThresholdMm);
     Serial1.begin(LDS_LDROBOT_LD19::SERIAL_BAUD_RATE);
     LiDAR.begin(Serial1);
     mecanumDriver.begin();
     rc.begin();
     lastControlUpdateMs = millis();
+    Monitor.println(tofStarted ? "ToF sensor ready on Wire1." : "ToF sensor init failed on Wire1.");
     Monitor.println("Setup complete.");
 }
 
 void loop() {
     rc.update();
     LiDAR.update();
+    const ToFDistanceMeasurement tofMeasurement = tofDistanceSensor.update();
 
     const uint32_t nowMs = millis();
     const uint32_t elapsedMs = nowMs - lastControlUpdateMs;
@@ -232,4 +238,5 @@ void loop() {
     lastControlUpdateMs = nowMs;
     // debug_print::printDetailedLidarDistances(LiDAR, lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
     debug_print::printLidarDistances(lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
+    debug_print::printTofMeasurement(tofMeasurement, tofDistanceSensor.getLastStatusCode(), tofDistanceSensor.getThresholdMm());
 }
