@@ -34,7 +34,7 @@ struct ToFDistanceMeasurement {
  */
 class ToFDistanceSensor {
    public:
-    static constexpr float kDefaultThresholdMm = 40.0f;
+    static constexpr float kDefaultThresholdMm = 50.0f;
     static constexpr uint8_t kInvalidStatusCode = 0xFF;
 
     /**

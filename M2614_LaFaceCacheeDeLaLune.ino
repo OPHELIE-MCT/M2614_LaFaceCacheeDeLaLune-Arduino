@@ -29,6 +29,7 @@ enum ControlState {
 enum AutoControlState {
     SLOW_FORWARD,
     STOP,
+    TOF_PAUSE_STOP,
     TURN,
     REPOSITION,
     SLOW_FORWARD_2,
@@ -39,18 +40,96 @@ enum AutoControlState {
 ControlState CURRENT_STATE = ControlState::MANUAL_CONTROL;
 AutoControlState AUTO_STATE = AutoControlState::SLOW_FORWARD;
 
-uint8_t stopCounter = 0;
+struct TofPauseTracker {
+    uint8_t completedStops;
+    uint8_t maxStops;
+    bool pauseArmed;
+    uint32_t pauseStartMs;
+    AutoControlState resumeState;
+    const char* segmentLabel;
+};
+
 constexpr uint32_t kDebugPrintDelayMs = 200;
 constexpr uint32_t kRcSignalLossDebounceMs = 250;
+constexpr uint32_t kTofPauseDurationMs = 2000;
 constexpr int16_t kJoystickDeadzone = 30;
 constexpr uint16_t kButtonPressThresholdUs = 1850;
+constexpr int16_t kTofSlowLongitudinalCommand = 85;
+constexpr int16_t kAutoForwardLongitudinalCommand = 95;
 constexpr float kToFStopThresholdMm = ToFDistanceSensor::kDefaultThresholdMm;
 
 uint32_t lastControlUpdateMs = 0;
 uint32_t driveSignalInvalidSinceMs = 0;
+TofPauseTracker tofPauseTracker = {0U, 0U, false, 0U, AutoControlState::SLOW_FORWARD, nullptr};
 
 int16_t applyDeadzone(int16_t value, int16_t deadzone) {
     return (value > -deadzone && value < deadzone) ? 0 : value;
+}
+
+const char* autoStateName(AutoControlState state) {
+    switch (state) {
+        case AutoControlState::SLOW_FORWARD:
+            return "SLOW_FORWARD";
+        case AutoControlState::STOP:
+            return "STOP";
+        case AutoControlState::TOF_PAUSE_STOP:
+            return "TOF_PAUSE_STOP";
+        case AutoControlState::TURN:
+            return "TURN";
+        case AutoControlState::REPOSITION:
+            return "REPOSITION";
+        case AutoControlState::SLOW_FORWARD_2:
+            return "SLOW_FORWARD_2";
+        case AutoControlState::EXIT_TURN:
+            return "EXIT_TURN";
+        case AutoControlState::EXIT_FORWARD:
+            return "EXIT_FORWARD";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+void configureTofPauseSegment(uint8_t maxStops, const char* segmentLabel, AutoControlState resumeState) {
+    tofPauseTracker.completedStops = 0U;
+    tofPauseTracker.maxStops = maxStops;
+    tofPauseTracker.pauseArmed = false;
+    tofPauseTracker.pauseStartMs = 0U;
+    tofPauseTracker.resumeState = resumeState;
+    tofPauseTracker.segmentLabel = segmentLabel;
+}
+
+void clearTofPauseTracking() {
+    tofPauseTracker.pauseArmed = false;
+    tofPauseTracker.pauseStartMs = 0U;
+    tofPauseTracker.maxStops = 0U;
+    tofPauseTracker.segmentLabel = nullptr;
+}
+
+void resetTofPauseTrackingStats() {
+    tofPauseTracker.completedStops = 0U;
+    tofPauseTracker.maxStops = 0U;
+    tofPauseTracker.pauseArmed = false;
+    tofPauseTracker.pauseStartMs = 0U;
+    tofPauseTracker.resumeState = AutoControlState::SLOW_FORWARD;
+    tofPauseTracker.segmentLabel = nullptr;
+}
+
+bool hasRemainingTofPauseBudget() {
+    return tofPauseTracker.completedStops < tofPauseTracker.maxStops;
+}
+
+void enterTofPauseStop(AutoControlState resumeState, uint32_t nowMs) {
+    tofPauseTracker.resumeState = resumeState;
+    tofPauseTracker.pauseStartMs = nowMs;
+    tofPauseTracker.pauseArmed = false;
+    if (tofPauseTracker.completedStops < UINT8_MAX) {
+        ++tofPauseTracker.completedStops;
+    }
+    AUTO_STATE = AutoControlState::TOF_PAUSE_STOP;
+    Monitor.println(
+        String("[DEBUG] Entering TOF_PAUSE_STOP in ") +
+        String(tofPauseTracker.segmentLabel != nullptr ? tofPauseTracker.segmentLabel : "UNKNOWN") +
+        " | stop " + String(tofPauseTracker.completedStops) + "/" + String(tofPauseTracker.maxStops));
 }
 
 void setup() {
@@ -99,6 +178,7 @@ void loop() {
         driveSignalInvalidSinceMs = 0;
         if (CURRENT_STATE == ControlState::CONNECTION_LOST) {
             CURRENT_STATE = ControlState::MANUAL_CONTROL;
+            resetTofPauseTrackingStats();
             Monitor.println("=============== RC SIGNAL RESTORED ===============");
         }
     } else {
@@ -135,6 +215,7 @@ void loop() {
             if (isAutoSwitchPressed && !wasAutoSwitchPressed) {
                 CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
                 AUTO_STATE = AutoControlState::SLOW_FORWARD;
+                configureTofPauseSegment(3U, "SLOW_FORWARD", AutoControlState::SLOW_FORWARD);
                 Monitor.println("=============== SWITCHING TO AUTOMATIC CONTROL MODE ===============");
             }
             wasAutoSwitchPressed = isAutoSwitchPressed;
@@ -144,12 +225,31 @@ void loop() {
 
             switch (AUTO_STATE) {
                 case AutoControlState::SLOW_FORWARD:
-                    longitudinalCommand = 100;
+                    longitudinalCommand = kAutoForwardLongitudinalCommand;
                     lateralCommand = 25;
+
+                    if (hasRemainingTofPauseBudget()) {
+                        if (tofPauseTracker.pauseArmed) {
+                            longitudinalCommand = kTofSlowLongitudinalCommand;
+                        }
+
+                        if (tofMeasurement.isValid) {
+                            if (tofMeasurement.isThresholdReached) {
+                                longitudinalCommand = kTofSlowLongitudinalCommand;
+                                tofPauseTracker.pauseArmed = true;
+                            }
+                        }
+                    }
+
                     if (lidarAt0Deg.distance_mm < 25) {
+                        clearTofPauseTracking();
                         AUTO_STATE = AutoControlState::TURN;
-                        stopCounter = 0;
                         Monitor.println("[DEBUG] Transitioning to TURN: Obstacle detected at 0° within 25mm");
+                    } else if (hasRemainingTofPauseBudget() && tofMeasurement.isValid && !tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
+                        longitudinalCommand = 0;
+                        lateralCommand = 0;
+                        rotationCommand = 0;
+                        enterTofPauseStop(AutoControlState::SLOW_FORWARD, nowMs);
                     }
                     break;
                 case AutoControlState::TURN:
@@ -162,7 +262,7 @@ void loop() {
                     }
                     break;
                 case AutoControlState::REPOSITION:
-                    longitudinalCommand = 0;
+                    longitudinalCommand = 50;
                     lateralCommand = 225;
                     rotationCommand = 0;
                     // Do that for 3 seconds, then stop
@@ -172,18 +272,51 @@ void loop() {
                     }
                     if ((nowMs - repositionStartMs) >= 3000) {
                         AUTO_STATE = AutoControlState::SLOW_FORWARD_2;
+                        configureTofPauseSegment(1U, "SLOW_FORWARD_2", AutoControlState::SLOW_FORWARD_2);
                         repositionStartMs = 0U;
                         Monitor.println("[DEBUG] Transitioning to SLOW_FORWARD_2: Completed repositioning maneuver");
                     }
                     break;
                 case AutoControlState::SLOW_FORWARD_2:
-                    longitudinalCommand = 100;
+                    longitudinalCommand = kAutoForwardLongitudinalCommand;
                     lateralCommand = 2;
                     rotationCommand = 0;
+
+                    if (hasRemainingTofPauseBudget()) {
+                        if (tofPauseTracker.pauseArmed) {
+                            longitudinalCommand = kTofSlowLongitudinalCommand;
+                        }
+
+                        if (tofMeasurement.isValid) {
+                            if (tofMeasurement.isThresholdReached) {
+                                longitudinalCommand = kTofSlowLongitudinalCommand;
+                                tofPauseTracker.pauseArmed = true;
+                            }
+                        }
+                    }
+
                     if (lidarAt0Deg.distance_mm < 25) {
+                        clearTofPauseTracking();
                         AUTO_STATE = AutoControlState::EXIT_TURN;
-                        stopCounter = 0;
                         Monitor.println("[DEBUG] Transitioning to EXIT_TURN: Obstacle detected at 0° within 25mm");
+                    } else if (hasRemainingTofPauseBudget() && tofMeasurement.isValid && !tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
+                        longitudinalCommand = 0;
+                        lateralCommand = 0;
+                        rotationCommand = 0;
+                        enterTofPauseStop(AutoControlState::SLOW_FORWARD_2, nowMs);
+                    }
+                    break;
+                case AutoControlState::TOF_PAUSE_STOP:
+                    longitudinalCommand = 0;
+                    lateralCommand = 0;
+                    rotationCommand = 0;
+                    if ((nowMs - tofPauseTracker.pauseStartMs) >= kTofPauseDurationMs) {
+                        AUTO_STATE = tofPauseTracker.resumeState;
+                        tofPauseTracker.pauseStartMs = 0U;
+                        Monitor.println(
+                            String("[DEBUG] Leaving TOF_PAUSE_STOP, resuming ") +
+                            String(autoStateName(AUTO_STATE)) +
+                            " | completed stops=" + String(tofPauseTracker.completedStops) + "/" + String(tofPauseTracker.maxStops));
                     }
                     break;
                 case AutoControlState::EXIT_TURN:
@@ -200,13 +333,16 @@ void loop() {
                     lateralCommand = 0;
                     rotationCommand = 0;
                     if (lidarAt0Deg.distance_mm < 350) {
+                        clearTofPauseTracking();
                         AUTO_STATE = AutoControlState::STOP;
                         Monitor.println("[DEBUG] Transitioning to STOP: Obstacle detected at 0° within 250mm");
                     }
                     break;
                 case AutoControlState::STOP:
+                    clearTofPauseTracking();
                     mecanumDriver.stop();
                     CURRENT_STATE = ControlState::MANUAL_CONTROL;
+                    resetTofPauseTrackingStats();
                     Monitor.println("=============== SWITCHING TO MANUAL CONTROL MODE ===============");
                     break;
             }
@@ -237,6 +373,10 @@ void loop() {
     if (elapsedMs < kDebugPrintDelayMs) return;
     lastControlUpdateMs = nowMs;
     // debug_print::printDetailedLidarDistances(LiDAR, lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
-    debug_print::printLidarDistances(lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
+    // debug_print::printLidarDistances(lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
     debug_print::printTofMeasurement(tofMeasurement, tofDistanceSensor.getLastStatusCode(), tofDistanceSensor.getThresholdMm());
+    // Monitor.println(
+    //     String("[DEBUG] Auto state=") + String(autoStateName(AUTO_STATE)) +
+    //     " | ToF stops=" + String(tofPauseTracker.completedStops) + "/" + String(tofPauseTracker.maxStops) +
+    //     " | pauseArmed=" + String(tofPauseTracker.pauseArmed ? 1 : 0));
 }
