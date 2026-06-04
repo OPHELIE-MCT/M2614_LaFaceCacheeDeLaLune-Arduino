@@ -49,7 +49,7 @@ struct TofPauseTracker {
     const char* segmentLabel;
 };
 
-constexpr uint32_t kDebugPrintDelayMs = 200;
+constexpr uint32_t kDebugPrintDelayMs = 50;
 constexpr uint32_t kRcSignalLossDebounceMs = 250;
 constexpr uint32_t kTofPauseDurationMs = 2000;
 constexpr int16_t kJoystickDeadzone = 30;
@@ -144,27 +144,20 @@ void setup() {
     rc.begin();
     lastControlUpdateMs = millis();
     Monitor.println(tofStarted ? "ToF sensor ready on Wire1." : "ToF sensor init failed on Wire1.");
+    tofDistanceSensor.update();
     Monitor.println("Setup complete.");
 }
 
 void loop() {
     rc.update();
     LiDAR.update();
-    const ToFDistanceMeasurement tofMeasurement = tofDistanceSensor.update();
+    // tofDistanceSensor.update();
+    const ToFDistanceMeasurement tofMeasurement = tofDistanceSensor.getLastMeasurement();
 
     const uint32_t nowMs = millis();
     const uint32_t elapsedMs = nowMs - lastControlUpdateMs;
 
-    constexpr LiDARSensor::QueryResult defaultQueryResult = {
-        false,
-        0U,
-        0U,
-        -1,
-        0,
-        0U,
-        0U,
-        0U};
-
+    constexpr LiDARSensor::QueryResult defaultQueryResult = {false, 0U, 0U, -1, -1, 0U, 0U, 0U};
     LiDARSensor::QueryResult lidarAt0Deg = defaultQueryResult;
     LiDARSensor::QueryResult lidarAt90Deg = defaultQueryResult;
     LiDARSensor::QueryResult lidarAt270Deg = defaultQueryResult;
@@ -244,7 +237,7 @@ void loop() {
                     if (lidarAt0Deg.distance_mm < 25) {
                         clearTofPauseTracking();
                         AUTO_STATE = AutoControlState::TURN;
-                        Monitor.println("[DEBUG] Transitioning to TURN: Obstacle detected at 0° within 25mm");
+                        Monitor.println("[DEBUG] Transitioning to TURN: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/25 mm");
                     } else if (hasRemainingTofPauseBudget() && tofMeasurement.isValid && !tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
                         longitudinalCommand = 0;
                         lateralCommand = 0;
@@ -258,7 +251,7 @@ void loop() {
                     rotationCommand = -150;
                     if (lidarAt0Deg.distance_mm > 430) {
                         AUTO_STATE = AutoControlState::REPOSITION;
-                        Monitor.println("[DEBUG] Transitioning to REPOSITION: Path ahead at 0° is clear beyond 430mm");
+                        Monitor.println("[DEBUG] Transitioning to REPOSITION: Path ahead at 0° is " + String(lidarAt0Deg.distance_mm) + "mm");
                     }
                     break;
                 case AutoControlState::REPOSITION:
@@ -298,7 +291,7 @@ void loop() {
                     if (lidarAt0Deg.distance_mm < 25) {
                         clearTofPauseTracking();
                         AUTO_STATE = AutoControlState::EXIT_TURN;
-                        Monitor.println("[DEBUG] Transitioning to EXIT_TURN: Obstacle detected at 0° within 25mm");
+                        Monitor.println("[DEBUG] Transitioning to EXIT_TURN: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/25 mm");
                     } else if (hasRemainingTofPauseBudget() && tofMeasurement.isValid && !tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
                         longitudinalCommand = 0;
                         lateralCommand = 0;
@@ -325,7 +318,7 @@ void loop() {
                     rotationCommand = -150;
                     if (lidarAt0Deg.distance_mm > 2000) {
                         AUTO_STATE = AutoControlState::EXIT_FORWARD;
-                        Monitor.println("[DEBUG] Transitioning to EXIT_FORWARD: Path ahead at 0° is clear beyond 2000mm");
+                        Monitor.println("[DEBUG] Transitioning to EXIT_FORWARD: Path ahead at 0° is clear beyond " + String(lidarAt0Deg.distance_mm) + "mm");
                     }
                     break;
                 case AutoControlState::EXIT_FORWARD:
@@ -335,7 +328,7 @@ void loop() {
                     if (lidarAt0Deg.distance_mm < 350) {
                         clearTofPauseTracking();
                         AUTO_STATE = AutoControlState::STOP;
-                        Monitor.println("[DEBUG] Transitioning to STOP: Obstacle detected at 0° within 250mm");
+                        Monitor.println("[DEBUG] Transitioning to STOP: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/350 mm");
                     }
                     break;
                 case AutoControlState::STOP:
@@ -372,9 +365,10 @@ void loop() {
     // ===== DEBUG PRINT ZONE =====
     if (elapsedMs < kDebugPrintDelayMs) return;
     lastControlUpdateMs = nowMs;
+    tofDistanceSensor.update();
     // debug_print::printDetailedLidarDistances(LiDAR, lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
     // debug_print::printLidarDistances(lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
-    debug_print::printTofMeasurement(tofMeasurement, tofDistanceSensor.getLastStatusCode(), tofDistanceSensor.getThresholdMm());
+    // debug_print::printTofMeasurement(tofMeasurement, tofDistanceSensor.getLastStatusCode(), tofDistanceSensor.getThresholdMm());
     // Monitor.println(
     //     String("[DEBUG] Auto state=") + String(autoStateName(AUTO_STATE)) +
     //     " | ToF stops=" + String(tofPauseTracker.completedStops) + "/" + String(tofPauseTracker.maxStops) +

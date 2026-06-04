@@ -55,19 +55,18 @@ class ToFDistanceSensor {
     bool begin(TwoWire& wire, float thresholdMm = kDefaultThresholdMm);
 
     /**
-     * @brief Poll the sensor once and return the latest measurement snapshot.
-     * @details The returned distance is the raw value from the latest poll. Check isValid before trusting it.
-     * @return Latest measurement snapshot containing distance, validity, and threshold state.
+     * @brief Poll the sensor once and refresh the cached measurement snapshot.
+     * @details The cached distance is the raw value from the latest poll. Check isValid on the getter result before trusting it.
      * @author GitHub Copilot
-     * @date 2026-06-03
+     * @date 2026-06-04
      */
-    ToFDistanceMeasurement update();
+    void update();
 
     /**
      * @brief Return the last cached measurement without polling the sensor again.
      * @return Cached measurement snapshot from the latest update().
      * @author GitHub Copilot
-     * @date 2026-06-03
+     * @date 2026-06-04
      */
     ToFDistanceMeasurement getLastMeasurement() const;
 

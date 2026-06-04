@@ -22,11 +22,11 @@ bool ToFDistanceSensor::begin(TwoWire& wire, float thresholdMm) {
     return started_;
 }
 
-ToFDistanceMeasurement ToFDistanceSensor::update() {
+void ToFDistanceSensor::update() {
     if (!started_) {
         lastMeasurement_ = {0.0f, false, false};
         lastStatusCode_ = kInvalidStatusCode;
-        return lastMeasurement_;
+        return;
     }
 
     const uint8_t distanceMm = sensor_.rangePollMeasurement();
@@ -34,7 +34,6 @@ ToFDistanceMeasurement ToFDistanceSensor::update() {
     lastMeasurement_.distanceMm = static_cast<float>(distanceMm);
     lastMeasurement_.isValid = (lastStatusCode_ == VL6180X_NO_ERR);
     lastMeasurement_.isThresholdReached = lastMeasurement_.isValid && (lastMeasurement_.distanceMm <= thresholdMm_);
-    return lastMeasurement_;
 }
 
 ToFDistanceMeasurement ToFDistanceSensor::getLastMeasurement() const {

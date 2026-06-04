@@ -34,7 +34,7 @@ class LiDARSensor {
         uint16_t requested_angle_deg;
         uint16_t matched_angle_deg_x100;
         int16_t angular_error_deg_x100;
-        int16_t distance_mm;
+        uint16_t distance_mm;
         uint8_t quality;
         uint32_t scan_id;
         uint16_t valid_point_count;

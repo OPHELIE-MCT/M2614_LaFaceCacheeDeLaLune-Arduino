@@ -129,7 +129,7 @@ void printDetailedLidarDistances(
 
 void printTofMeasurement(const ToFDistanceMeasurement& measurement, uint8_t statusCode, float thresholdMm) {
     Monitor.println(
-        String("ToF distance | value=") + String(measurement.distanceMm, 1) +
+        String("[ToF] | value=") + String(measurement.distanceMm, 1) +
         "mm | valid=" + String(measurement.isValid ? 1 : 0) +
         " | status=0x" + String(statusCode, HEX) +
         " | threshold=" + String(thresholdMm, 1) +
