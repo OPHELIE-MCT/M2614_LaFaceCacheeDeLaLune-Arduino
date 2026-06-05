@@ -12,6 +12,10 @@ uint32_t rcUpdateIntervalMaxUs = 0;
 uint32_t rcUpdateIntervalSumUs = 0;
 uint32_t rcUpdateIntervalCount = 0;
 
+float pulsesPer50Ms(int32_t pulseCount) {
+    return static_cast<float>(pulseCount) / static_cast<float>(FeedbackEncoder::kSamplePeriodMs);
+}
+
 const char* rcChannelName(RCChannel channel) {
     switch (channel) {
         case RCChannel::A:
@@ -159,6 +163,14 @@ void printTargetWheelCommands(const MecanumDriver::WheelCommands& wheelCommands)
         String(wheelCommands.frontRight) + ", " +
         String(wheelCommands.rearLeft) + ", " +
         String(wheelCommands.rearRight));
+}
+
+void printEncoderPulsesPer50Ms(const EncoderSpeedSnapshot& snapshot) {
+    Monitor.println(
+        String("[ENC] pulses/50ms FL=") + String(pulsesPer50Ms(snapshot.frontLeft), 3) +
+        " | FR=" + String(pulsesPer50Ms(snapshot.frontRight), 3) +
+        " | BL=" + String(pulsesPer50Ms(snapshot.rearLeft), 3) +
+        " | BR=" + String(pulsesPer50Ms(snapshot.rearRight), 3));
 }
 
 }  // namespace debug_print

@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 #include "../LiDAR/LiDARSensor.h"
+#include "../driver/FeedbackEncoder.h"
 #include "../driver/MecanumDriver.h"
 #include "../driver/RemoteController.h"
 #include "../driver/ToFDistanceSensor.h"
@@ -99,5 +100,13 @@ void printScaledWheelCommands(float frontLeftCommand, float frontRightCommand, f
  * @date 2026-06-03
  */
 void printTargetWheelCommands(const MecanumDriver::WheelCommands& wheelCommands);
+
+/**
+ * @brief Print the latest encoder pulse snapshot normalized to the fixed sample period.
+ * @param snapshot Encoder pulse counts captured during the most recent sampling window.
+ * @author GitHub Copilot
+ * @date 2026-06-04
+ */
+void printEncoderPulsesPer50Ms(const EncoderSpeedSnapshot& snapshot);
 
 }  // namespace debug_print
