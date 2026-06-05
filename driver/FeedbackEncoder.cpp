@@ -37,9 +37,7 @@ void FeedbackEncoder::begin() {
     attachInterrupt(digitalPinToInterrupt(pins_.rearRight.b), isrRearRight, CHANGE);
 
     running_ = true;
-    threadId_ = k_thread_create(&threadData_, threadStack_, sizeof(threadStack_),
-                                processingThreadEntry, this, nullptr, nullptr,
-                                kThreadPriority, 0, K_NO_WAIT);
+    threadId_ = k_thread_create(&threadData_, threadStack_, sizeof(threadStack_), processingThreadEntry, this, nullptr, nullptr, kThreadPriority, 0, K_NO_WAIT);
 }
 
 void FeedbackEncoder::end() {

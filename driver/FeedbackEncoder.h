@@ -56,6 +56,8 @@ struct EncoderSpeedSnapshot {
  */
 class FeedbackEncoder {
    public:
+    static constexpr int32_t kSamplePeriodMs = 50;
+
     /**
      * @brief Construct the encoder reader from full wheel encoder pin mapping.
      * @param pins Complete channel A/B pin mapping for all wheels.
@@ -73,7 +75,7 @@ class FeedbackEncoder {
 
     /**
      * @brief Configure pin modes, attach channel B interrupts, and start thread.
-     * @description This method is idempotent and returns immediately if already started.
+     * @details This method is idempotent and returns immediately if already started.
      * @author GOLETTA David
      * @date 2026-05-18
      */
@@ -81,7 +83,7 @@ class FeedbackEncoder {
 
     /**
      * @brief Stop thread processing and detach channel B interrupts.
-     * @description This method is idempotent and returns immediately if not running.
+     * @details This method is idempotent and returns immediately if not running.
      * @author GOLETTA David
      * @date 2026-05-18
      */
@@ -106,7 +108,7 @@ class FeedbackEncoder {
 
     static constexpr size_t kThreadStackSize = 1024;
     static constexpr int kThreadPriority = 7;
-    static constexpr int32_t kThreadPeriodMs = 50;
+    static constexpr int32_t kThreadPeriodMs = kSamplePeriodMs;
 
     FeedbackEncoderPins pins_;
     atomic_t edgeCounters_[kWheelCount];

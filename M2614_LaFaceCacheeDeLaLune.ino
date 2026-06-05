@@ -3,6 +3,7 @@
 #include "LiDAR/LiDARSensor.h"
 #include "PINS.h"
 #include "debug/debug_print.h"
+#include "driver/FeedbackEncoder.h"
 #include "driver/MecanumDriver.h"
 #include "driver/RemoteController.h"
 #include "driver/ToFDistanceSensor.h"
@@ -13,6 +14,14 @@ MotorPinConfig rearLeftPins = {BL_IN1, BL_IN2, BL_EN};
 MotorPinConfig rearRightPins = {BR_IN1, BR_IN2, BR_EN};
 MecanumPins mecanumPins = {frontLeftPins, frontRightPins, rearLeftPins, rearRightPins};
 MecanumDriver mecanumDriver = MecanumDriver(mecanumPins);
+
+FeedbackEncoderPins encoderPins = {
+    {FL_ENC_A, FL_ENC_B},
+    {FR_ENC_A, FR_ENC_B},
+    {BL_ENC_A, BL_ENC_B},
+    {BR_ENC_A, BR_ENC_B},
+};
+FeedbackEncoder feedbackEncoder = FeedbackEncoder(encoderPins);
 
 RCReceiverPins rcPins = {RC_PIN_A, RC_PIN_B, RC_PIN_C, RC_PIN_D, RC_PIN_E, RC_PIN_F, RC_PIN_G, RC_PIN_H};
 RemoteController rc = RemoteController(rcPins);
@@ -141,6 +150,7 @@ void setup() {
     Serial1.begin(LDS_LDROBOT_LD19::SERIAL_BAUD_RATE);
     LiDAR.begin(Serial1);
     mecanumDriver.begin();
+    feedbackEncoder.begin();
     rc.begin();
     lastControlUpdateMs = millis();
     Monitor.println(tofStarted ? "ToF sensor ready on Wire1." : "ToF sensor init failed on Wire1.");
@@ -366,6 +376,8 @@ void loop() {
     if (elapsedMs < kDebugPrintDelayMs) return;
     lastControlUpdateMs = nowMs;
     tofDistanceSensor.update();
+    EncoderSpeedSnapshot feedbackEncoderSnapshot = feedbackEncoder.getCurrentSpeed();
+    debug_print::printEncoderPulsesPer50Ms(feedbackEncoderSnapshot);
     // debug_print::printDetailedLidarDistances(LiDAR, lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
     // debug_print::printLidarDistances(lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
     // debug_print::printTofMeasurement(tofMeasurement, tofDistanceSensor.getLastStatusCode(), tofDistanceSensor.getThresholdMm());

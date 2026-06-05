@@ -12,7 +12,7 @@
 /**
  * @struct ToFDistanceMeasurement
  * @brief Snapshot returned by the ToF sensor polling API.
- * @author GitHub Copilot
+ * @author GOLETTA David
  * @date 2026-06-03
  */
 struct ToFDistanceMeasurement {
@@ -29,7 +29,7 @@ struct ToFDistanceMeasurement {
  * exposes one polling method that returns a compact measurement struct suited
  * for both debug output and later stop-threshold logic.
  *
- * @author GitHub Copilot
+ * @author GOLETTA David
  * @date 2026-06-03
  */
 class ToFDistanceSensor {
@@ -39,7 +39,7 @@ class ToFDistanceSensor {
 
     /**
      * @brief Construct an idle ToF wrapper with an invalid cached reading.
-     * @author GitHub Copilot
+     * @author GOLETTA David
      * @date 2026-06-03
      */
     ToFDistanceSensor();
@@ -49,7 +49,7 @@ class ToFDistanceSensor {
      * @param wire I2C bus instance connected to the sensor.
      * @param thresholdMm Distance threshold in millimeters used for threshold reporting.
      * @return True when the sensor responds and initialization succeeds, otherwise false.
-     * @author GitHub Copilot
+     * @author GOLETTA David
      * @date 2026-06-03
      */
     bool begin(TwoWire& wire, float thresholdMm = kDefaultThresholdMm);
@@ -57,7 +57,7 @@ class ToFDistanceSensor {
     /**
      * @brief Poll the sensor once and refresh the cached measurement snapshot.
      * @details The cached distance is the raw value from the latest poll. Check isValid on the getter result before trusting it.
-     * @author GitHub Copilot
+     * @author GOLETTA David
      * @date 2026-06-04
      */
     void update();
@@ -65,7 +65,7 @@ class ToFDistanceSensor {
     /**
      * @brief Return the last cached measurement without polling the sensor again.
      * @return Cached measurement snapshot from the latest update().
-     * @author GitHub Copilot
+     * @author GOLETTA David
      * @date 2026-06-04
      */
     ToFDistanceMeasurement getLastMeasurement() const;
@@ -73,7 +73,7 @@ class ToFDistanceSensor {
     /**
      * @brief Return the currently configured threshold in millimeters.
      * @return Threshold used to populate isThresholdReached.
-     * @author GitHub Copilot
+     * @author GOLETTA David
      * @date 2026-06-03
      */
     float getThresholdMm() const;
@@ -81,7 +81,7 @@ class ToFDistanceSensor {
     /**
      * @brief Return the status code reported by the last VL6180X poll.
      * @return Library status code, or 0xFF when the sensor has not started.
-     * @author GitHub Copilot
+     * @author GOLETTA David
      * @date 2026-06-03
      */
     uint8_t getLastStatusCode() const;
@@ -89,7 +89,7 @@ class ToFDistanceSensor {
     /**
      * @brief Check whether the sensor completed a successful begin sequence.
      * @return True when the wrapper is ready to poll hardware, otherwise false.
-     * @author GitHub Copilot
+     * @author GOLETTA David
      * @date 2026-06-03
      */
     bool isStarted() const;
