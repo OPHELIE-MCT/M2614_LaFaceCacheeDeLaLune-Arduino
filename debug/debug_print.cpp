@@ -12,8 +12,12 @@ uint32_t rcUpdateIntervalMaxUs = 0;
 uint32_t rcUpdateIntervalSumUs = 0;
 uint32_t rcUpdateIntervalCount = 0;
 
-float pulsesPer50Ms(int32_t pulseCount) {
+float pulsesPerMs(int32_t pulseCount) {
     return static_cast<float>(pulseCount) / static_cast<float>(FeedbackEncoder::kSamplePeriodMs);
+}
+
+uint16_t pulsesPer50Ms(int32_t pulseCount) {
+    return static_cast<uint16_t>(pulseCount);
 }
 
 const char* rcChannelName(RCChannel channel) {
@@ -166,11 +170,13 @@ void printTargetWheelCommands(const MecanumDriver::WheelCommands& wheelCommands)
 }
 
 void printEncoderPulsesPer50Ms(const EncoderSpeedSnapshot& snapshot) {
+    if (snapshot.frontLeft == 0 && snapshot.frontRight == 0 && snapshot.rearLeft == 0 && snapshot.rearRight == 0)
+        return;
     Monitor.println(
-        String("[ENC] pulses/50ms FL=") + String(pulsesPer50Ms(snapshot.frontLeft), 3) +
-        " | FR=" + String(pulsesPer50Ms(snapshot.frontRight), 3) +
-        " | BL=" + String(pulsesPer50Ms(snapshot.rearLeft), 3) +
-        " | BR=" + String(pulsesPer50Ms(snapshot.rearRight), 3));
+        "[ENC] pulses/50ms FL=" + String(snapshot.frontLeft) +
+        " | FR=" + String(snapshot.frontRight) +
+        " | BL=" + String(snapshot.rearLeft) +
+        " | BR=" + String(snapshot.rearRight));
 }
 
 }  // namespace debug_print
