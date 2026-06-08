@@ -77,9 +77,9 @@ TofPauseTracker tofPauseTracker = {0U, 0U, false, 0U, AutoControlState::SLOW_FOR
 // the placeholder values below will compile but may need adjustment.
 // outputMin is 0 because the encoder has no direction sensing (channel B only).
 constexpr SpeedControllerConfig kWheelPidConfig = {
-    /* kp          */ 8.0f,
-    /* ki          */ 0.5f,
-    /* kd          */ 0.2f,
+    /* kp          */ 2.0f,
+    /* ki          */ 0.0f,
+    /* kd          */ 0.0f,
     /* integralMin */ -200.0f,
     /* integralMax */ 200.0f,
     /* outputMin   */ -120.0f,
@@ -89,7 +89,7 @@ constexpr SpeedControllerConfig kWheelPidConfig = {
 // Open-loop forward bias used by the PID controllers.
 // The PID output is a correction added on top of this baseline instead of the
 // final wheel command itself.
-constexpr int16_t kWheelPidBaseCommand = 150;
+constexpr int16_t kWheelPidBaseCommand = 50;
 
 PIDSpeedController pidFL(kWheelPidConfig);
 PIDSpeedController pidFR(kWheelPidConfig);
@@ -100,8 +100,8 @@ PIDSpeedController pidRR(kWheelPidConfig);
 // SLOW_FORWARD: FL/RR slightly higher to replicate the old lateralCommand=25 drift.
 // SLOW_FORWARD_2: balanced, no lateral component.
 // Adjust these values based on observed encoder readings at the desired speed.
-constexpr WheelSpeedTargets kSlowForwardTargets = {30.0f, 22.0f, 22.0f, 30.0f};
-constexpr WheelSpeedTargets kSlowForward2Targets = {26.0f, 26.0f, 26.0f, 26.0f};
+constexpr WheelSpeedTargets kSlowForwardTargets = {20.0f, 12.0f, 12.0f, 20.0f};
+constexpr WheelSpeedTargets kSlowForward2Targets = {16.0f, 16.0f, 16.0f, 16.0f};
 
 // Last PID wheel command, updated every 50 ms and held between updates.
 MecanumDriver::WheelCommands pidWheelCommands = {0, 0, 0, 0};
