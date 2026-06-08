@@ -6,6 +6,7 @@
 #include "driver/FeedbackEncoder.h"
 #include "driver/MecanumDriver.h"
 #include "driver/RemoteController.h"
+#include "driver/SpeedController.h"
 #include "driver/ToFDistanceSensor.h"
 
 MotorPinConfig frontLeftPins = {FL_IN1, FL_IN2, FL_EN};
@@ -70,6 +71,46 @@ constexpr float kToFStopThresholdMm = ToFDistanceSensor::kDefaultThresholdMm;
 uint32_t lastControlUpdateMs = 0;
 uint32_t driveSignalInvalidSinceMs = 0;
 TofPauseTracker tofPauseTracker = {0U, 0U, false, 0U, AutoControlState::SLOW_FORWARD, nullptr};
+
+// ===== PID SPEED CONTROLLER =====
+// Gains and clamps are shared across all four wheels. Tune kp/ki/kd on the robot;
+// the placeholder values below will compile but may need adjustment.
+// outputMin is 0 because the encoder has no direction sensing (channel B only).
+constexpr SpeedControllerConfig kWheelPidConfig = {
+    /* kp          */ 8.0f,
+    /* ki          */ 0.5f,
+    /* kd          */ 0.2f,
+    /* integralMin */ -200.0f,
+    /* integralMax */ 200.0f,
+    /* outputMin   */ -120.0f,
+    /* outputMax   */ 120.0f,
+};
+
+// Open-loop forward bias used by the PID controllers.
+// The PID output is a correction added on top of this baseline instead of the
+// final wheel command itself.
+constexpr int16_t kWheelPidBaseCommand = 150;
+
+PIDSpeedController pidFL(kWheelPidConfig);
+PIDSpeedController pidFR(kWheelPidConfig);
+PIDSpeedController pidRL(kWheelPidConfig);
+PIDSpeedController pidRR(kWheelPidConfig);
+
+// Per-segment wheel speed targets (pulses / 50 ms).
+// SLOW_FORWARD: FL/RR slightly higher to replicate the old lateralCommand=25 drift.
+// SLOW_FORWARD_2: balanced, no lateral component.
+// Adjust these values based on observed encoder readings at the desired speed.
+constexpr WheelSpeedTargets kSlowForwardTargets = {30.0f, 22.0f, 22.0f, 30.0f};
+constexpr WheelSpeedTargets kSlowForward2Targets = {26.0f, 26.0f, 26.0f, 26.0f};
+
+// Last PID wheel command, updated every 50 ms and held between updates.
+MecanumDriver::WheelCommands pidWheelCommands = {0, 0, 0, 0};
+
+// True when the active AUTO_STATE uses per-wheel PID; skips mix() in the drive path.
+bool inPidForwardMode = false;
+
+// Tracks the previous AUTO_STATE to detect state entries (used to reset PIDs).
+AutoControlState prevAutoState = AutoControlState::SLOW_FORWARD;
 
 int16_t applyDeadzone(int16_t value, int16_t deadzone) {
     return (value > -deadzone && value < deadzone) ? 0 : value;
@@ -159,6 +200,7 @@ void setup() {
 }
 
 void loop() {
+    inPidForwardMode = false;
     rc.update();
     LiDAR.update();
     // tofDistanceSensor.update();
@@ -228,19 +270,18 @@ void loop() {
 
             switch (AUTO_STATE) {
                 case AutoControlState::SLOW_FORWARD:
-                    longitudinalCommand = kAutoForwardLongitudinalCommand;
-                    lateralCommand = 25;
+                    if (prevAutoState != AUTO_STATE) {
+                        pidFL.reset();
+                        pidFR.reset();
+                        pidRL.reset();
+                        pidRR.reset();
+                        pidWheelCommands = {0, 0, 0, 0};
+                    }
+                    inPidForwardMode = true;
 
                     if (hasRemainingTofPauseBudget()) {
-                        if (tofPauseTracker.pauseArmed) {
-                            longitudinalCommand = kTofSlowLongitudinalCommand;
-                        }
-
-                        if (tofMeasurement.isValid) {
-                            if (tofMeasurement.isThresholdReached) {
-                                longitudinalCommand = kTofSlowLongitudinalCommand;
-                                tofPauseTracker.pauseArmed = true;
-                            }
+                        if (tofMeasurement.isValid && tofMeasurement.isThresholdReached) {
+                            tofPauseTracker.pauseArmed = true;
                         }
                     }
 
@@ -249,9 +290,7 @@ void loop() {
                         AUTO_STATE = AutoControlState::TURN;
                         Monitor.println("[DEBUG] Transitioning to TURN: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/25 mm");
                     } else if (hasRemainingTofPauseBudget() && tofMeasurement.isValid && !tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
-                        longitudinalCommand = 0;
-                        lateralCommand = 0;
-                        rotationCommand = 0;
+                        pidWheelCommands = {0, 0, 0, 0};
                         enterTofPauseStop(AutoControlState::SLOW_FORWARD, nowMs);
                     }
                     break;
@@ -281,20 +320,18 @@ void loop() {
                     }
                     break;
                 case AutoControlState::SLOW_FORWARD_2:
-                    longitudinalCommand = kAutoForwardLongitudinalCommand;
-                    lateralCommand = 2;
-                    rotationCommand = 0;
+                    if (prevAutoState != AUTO_STATE) {
+                        pidFL.reset();
+                        pidFR.reset();
+                        pidRL.reset();
+                        pidRR.reset();
+                        pidWheelCommands = {0, 0, 0, 0};
+                    }
+                    inPidForwardMode = true;
 
                     if (hasRemainingTofPauseBudget()) {
-                        if (tofPauseTracker.pauseArmed) {
-                            longitudinalCommand = kTofSlowLongitudinalCommand;
-                        }
-
-                        if (tofMeasurement.isValid) {
-                            if (tofMeasurement.isThresholdReached) {
-                                longitudinalCommand = kTofSlowLongitudinalCommand;
-                                tofPauseTracker.pauseArmed = true;
-                            }
+                        if (tofMeasurement.isValid && tofMeasurement.isThresholdReached) {
+                            tofPauseTracker.pauseArmed = true;
                         }
                     }
 
@@ -303,9 +340,7 @@ void loop() {
                         AUTO_STATE = AutoControlState::EXIT_TURN;
                         Monitor.println("[DEBUG] Transitioning to EXIT_TURN: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/25 mm");
                     } else if (hasRemainingTofPauseBudget() && tofMeasurement.isValid && !tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
-                        longitudinalCommand = 0;
-                        lateralCommand = 0;
-                        rotationCommand = 0;
+                        pidWheelCommands = {0, 0, 0, 0};
                         enterTofPauseStop(AutoControlState::SLOW_FORWARD_2, nowMs);
                     }
                     break;
@@ -349,6 +384,7 @@ void loop() {
                     Monitor.println("=============== SWITCHING TO MANUAL CONTROL MODE ===============");
                     break;
             }
+            prevAutoState = AUTO_STATE;
             break;
         case ControlState::CONNECTION_LOST:
             // We should never reach this case due to the hasDriveSignal check above, but we include it for completeness.
@@ -356,21 +392,30 @@ void loop() {
             return;
     }
 
-    const MecanumDriver::WheelCommands targetWheelCommands = MecanumDriver::mix(lateralCommand, longitudinalCommand, rotationCommand);
+    if (inPidForwardMode) {
+        // PID mode: drive wheels directly from last PID output — no mix(), no scaling.
+        mecanumDriver.driveWheels(
+            pidWheelCommands.frontLeft,
+            pidWheelCommands.frontRight,
+            pidWheelCommands.rearLeft,
+            pidWheelCommands.rearRight);
+    } else {
+        const MecanumDriver::WheelCommands targetWheelCommands = MecanumDriver::mix(lateralCommand, longitudinalCommand, rotationCommand);
 
-    float frontLeftCommand = static_cast<float>(targetWheelCommands.frontLeft);
-    float frontRightCommand = static_cast<float>(targetWheelCommands.frontRight);
-    float rearLeftCommand = static_cast<float>(targetWheelCommands.rearLeft);
-    float rearRightCommand = static_cast<float>(targetWheelCommands.rearRight);
+        float frontLeftCommand = static_cast<float>(targetWheelCommands.frontLeft);
+        float frontRightCommand = static_cast<float>(targetWheelCommands.frontRight);
+        float rearLeftCommand = static_cast<float>(targetWheelCommands.rearLeft);
+        float rearRightCommand = static_cast<float>(targetWheelCommands.rearRight);
 
-    constexpr float speedScalingFactor = 0.65f;
-    constexpr float speedOffset = 0.0f;
-    frontLeftCommand = frontLeftCommand * speedScalingFactor + speedOffset;
-    frontRightCommand = frontRightCommand * speedScalingFactor + speedOffset;
-    rearLeftCommand = rearLeftCommand * speedScalingFactor + speedOffset;
-    rearRightCommand = rearRightCommand * speedScalingFactor + speedOffset;
+        constexpr float speedScalingFactor = 0.65f;
+        constexpr float speedOffset = 0.0f;
+        frontLeftCommand = frontLeftCommand * speedScalingFactor + speedOffset;
+        frontRightCommand = frontRightCommand * speedScalingFactor + speedOffset;
+        rearLeftCommand = rearLeftCommand * speedScalingFactor + speedOffset;
+        rearRightCommand = rearRightCommand * speedScalingFactor + speedOffset;
 
-    mecanumDriver.driveWheels(static_cast<int16_t>(frontLeftCommand), static_cast<int16_t>(frontRightCommand), static_cast<int16_t>(rearLeftCommand), static_cast<int16_t>(rearRightCommand));
+        mecanumDriver.driveWheels(static_cast<int16_t>(frontLeftCommand), static_cast<int16_t>(frontRightCommand), static_cast<int16_t>(rearLeftCommand), static_cast<int16_t>(rearRightCommand));
+    }
 
     // ===== DEBUG PRINT ZONE =====
     if (elapsedMs < kDebugPrintDelayMs) return;
@@ -378,6 +423,31 @@ void loop() {
     tofDistanceSensor.update();
     EncoderSpeedSnapshot feedbackEncoderSnapshot = feedbackEncoder.getCurrentSpeed();
     debug_print::printEncoderPulsesPer50Ms(feedbackEncoderSnapshot);
+
+    // ===== PID UPDATE (every 50 ms, synchronized with encoder sample window) =====
+    if (inPidForwardMode) {
+        const WheelSpeedTargets& target = (AUTO_STATE == AutoControlState::SLOW_FORWARD) ? kSlowForwardTargets : kSlowForward2Targets;
+        constexpr float kDtSeconds = static_cast<float>(FeedbackEncoder::kSamplePeriodMs) / 1000.0f;
+        const int16_t frontLeftCorrection = static_cast<int16_t>(pidFL.update(target.frontLeft, static_cast<float>(feedbackEncoderSnapshot.frontLeft), kDtSeconds));
+        const int16_t frontRightCorrection = static_cast<int16_t>(pidFR.update(target.frontRight, static_cast<float>(feedbackEncoderSnapshot.frontRight), kDtSeconds));
+        const int16_t rearLeftCorrection = static_cast<int16_t>(pidRL.update(target.rearLeft, static_cast<float>(feedbackEncoderSnapshot.rearLeft), kDtSeconds));
+        const int16_t rearRightCorrection = static_cast<int16_t>(pidRR.update(target.rearRight, static_cast<float>(feedbackEncoderSnapshot.rearRight), kDtSeconds));
+
+        pidWheelCommands.frontLeft = constrain(static_cast<int16_t>(kWheelPidBaseCommand + frontLeftCorrection), 0, 500);
+        pidWheelCommands.frontRight = constrain(static_cast<int16_t>(kWheelPidBaseCommand + frontRightCorrection), 0, 500);
+        pidWheelCommands.rearLeft = constrain(static_cast<int16_t>(kWheelPidBaseCommand + rearLeftCorrection), 0, 500);
+        pidWheelCommands.rearRight = constrain(static_cast<int16_t>(kWheelPidBaseCommand + rearRightCorrection), 0, 500);
+
+        // Monitor.println(
+        //     String("[DEBUG] PID commands: FL=") + String(pidWheelCommands.frontLeft) +
+        //     " FR=" + String(pidWheelCommands.frontRight) +
+        //     " RL=" + String(pidWheelCommands.rearLeft) +
+        //     " RR=" + String(pidWheelCommands.rearRight) +
+        //     String(" | corr FL=") + String(frontLeftCorrection) +
+        //     " FR=" + String(frontRightCorrection) +
+        //     " RL=" + String(rearLeftCorrection) +
+        //     " RR=" + String(rearRightCorrection));
+    }
     // debug_print::printDetailedLidarDistances(LiDAR, lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
     // debug_print::printLidarDistances(lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
     // debug_print::printTofMeasurement(tofMeasurement, tofDistanceSensor.getLastStatusCode(), tofDistanceSensor.getThresholdMm());

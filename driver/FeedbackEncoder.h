@@ -45,6 +45,22 @@ struct EncoderSpeedSnapshot {
 };
 
 /**
+ * @struct WheelSpeedTargets
+ * @brief Per-wheel speed setpoints for the PID speed controllers.
+ *
+ * All values are expressed in pulses per 50 ms, matching the unit produced by
+ * EncoderSpeedSnapshot, so they can be compared directly.
+ * @author GOLETTA David
+ * @date 2026-06-08
+ */
+struct WheelSpeedTargets {
+    float frontLeft;
+    float frontRight;
+    float rearLeft;
+    float rearRight;
+};
+
+/**
  * @class FeedbackEncoder
  * @brief Reads wheel feedback encoders using channel B interrupts only.
  *
