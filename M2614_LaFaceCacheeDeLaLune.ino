@@ -58,7 +58,12 @@ struct SensorSnapshot {
     LiDARSensor::QueryResult lidarAt270Deg;
 };
 
-// ===== DRIVE COMMAND STRUCT =====
+/**
+ * @brief Struct to hold longitudinal, lateral, and rotational drive commands.
+ * @param longitudinal Forward/backward command in [-500, 500].
+ * @param lateral Left/right command in [-500, 500].
+ * @param rotation Rotational command in [-500, 500].
+ */
 struct DriveCommands {
     int16_t longitudinal;
     int16_t lateral;
@@ -80,6 +85,7 @@ constexpr uint32_t kDebugPrintDelayMs = 50;
 constexpr uint32_t kRcSignalLossDebounceMs = 250;
 constexpr uint32_t kTofPauseDurationMs = 2000;
 constexpr uint32_t kTofRisingEdgeStopDelayMs = 120;
+constexpr uint32_t kThirdTofRisingEdgeStopDelayMs = 180;
 constexpr int16_t kJoystickDeadzone = 30;
 constexpr uint16_t kButtonPressThresholdUs = 1850;
 constexpr int16_t kTofSlowLongitudinalCommand = 85;
@@ -293,7 +299,13 @@ void handleTofPause(AutoControlState resumeState, const ToFDistanceMeasurement& 
             tofPauseTracker.stopPending = true;
             tofPauseTracker.stopPendingSinceMs = nowMs;
         }
-        if ((nowMs - tofPauseTracker.stopPendingSinceMs) >= kTofRisingEdgeStopDelayMs) {
+        const uint32_t stopPendingDurationMs = nowMs - tofPauseTracker.stopPendingSinceMs;
+        if (tofPauseTracker.completedStops == 2U) {
+            if (stopPendingDurationMs >= kThirdTofRisingEdgeStopDelayMs) {
+                pidWheelCommands = {0, 0, 0, 0};
+                enterTofPauseStop(resumeState, nowMs);
+            }
+        } else if (stopPendingDurationMs >= kTofRisingEdgeStopDelayMs) {
             pidWheelCommands = {0, 0, 0, 0};
             enterTofPauseStop(resumeState, nowMs);
         }
@@ -340,7 +352,7 @@ DriveCommands handleAutoReposition(const SensorSnapshot& sensors, uint32_t nowMs
         repositionStartMs = 0U;
         Monitor.println("[DEBUG] Transitioning to SLOW_FORWARD_2: Completed repositioning maneuver");
     }
-    return {50, 225, 0};
+    return {30, 325, -30};
 }
 
 DriveCommands handleAutoSlowForward2(const SensorSnapshot& sensors, uint32_t nowMs) {
@@ -384,7 +396,7 @@ DriveCommands handleAutoExitTurn(const SensorSnapshot& sensors) {
 }
 
 DriveCommands handleAutoExitForward(const SensorSnapshot& sensors) {
-    if (sensors.lidarAt0Deg.found && sensors.lidarAt0Deg.distance_mm < 350) {
+    if (sensors.lidarAt0Deg.found && sensors.lidarAt0Deg.distance_mm < 450) {
         clearTofPauseTracking();
         AUTO_STATE = AutoControlState::STOP;
         Monitor.println("[DEBUG] Transitioning to STOP: Obstacle detected at 0° at " + String(sensors.lidarAt0Deg.distance_mm) + "/350 mm");
