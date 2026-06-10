@@ -306,7 +306,7 @@ void loop() {
                         }
                     }
 
-                    if (lidarAt0Deg.distance_mm < 25) {
+                    if (lidarAt0Deg.found && lidarAt0Deg.distance_mm < 25) {
                         clearTofPauseTracking();
                         AUTO_STATE = AutoControlState::TURN;
                         Monitor.println("[DEBUG] Transitioning to TURN: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/25 mm");
@@ -316,7 +316,7 @@ void loop() {
                     longitudinalCommand = 0;
                     lateralCommand = 0;
                     rotationCommand = -150;
-                    if (lidarAt0Deg.distance_mm > 430) {
+                    if (lidarAt0Deg.found && lidarAt0Deg.distance_mm > 430) {
                         AUTO_STATE = AutoControlState::REPOSITION;
                         Monitor.println("[DEBUG] Transitioning to REPOSITION: Path ahead at 0° is " + String(lidarAt0Deg.distance_mm) + "mm");
                     }
@@ -365,7 +365,7 @@ void loop() {
                         }
                     }
 
-                    if (lidarAt0Deg.distance_mm < 25) {
+                    if (lidarAt0Deg.found && lidarAt0Deg.distance_mm < 25) {
                         clearTofPauseTracking();
                         AUTO_STATE = AutoControlState::EXIT_TURN;
                         Monitor.println("[DEBUG] Transitioning to EXIT_TURN: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/25 mm");
@@ -388,7 +388,7 @@ void loop() {
                     longitudinalCommand = 0;
                     lateralCommand = 0;
                     rotationCommand = -150;
-                    if (lidarAt0Deg.distance_mm > 2000) {
+                    if (lidarAt0Deg.found && lidarAt0Deg.distance_mm > 2000) {
                         AUTO_STATE = AutoControlState::EXIT_FORWARD;
                         Monitor.println("[DEBUG] Transitioning to EXIT_FORWARD: Path ahead at 0° is clear beyond " + String(lidarAt0Deg.distance_mm) + "mm");
                     }
@@ -397,7 +397,7 @@ void loop() {
                     longitudinalCommand = 250;
                     lateralCommand = 0;
                     rotationCommand = 0;
-                    if (lidarAt0Deg.distance_mm < 350) {
+                    if (lidarAt0Deg.found && lidarAt0Deg.distance_mm < 350) {
                         clearTofPauseTracking();
                         AUTO_STATE = AutoControlState::STOP;
                         Monitor.println("[DEBUG] Transitioning to STOP: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/350 mm");
