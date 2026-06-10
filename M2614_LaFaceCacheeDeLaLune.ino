@@ -242,6 +242,7 @@ SensorSnapshot updateSensors() {
 
 // ===== RC SIGNAL / CONNECTION MANAGEMENT =====
 void updateConnectionState(uint32_t nowMs) {
+    static bool hasSignal = true;
     const bool hasDriveSignal = rc.isSignalValid(RCChannel::A) && rc.isSignalValid(RCChannel::B) && rc.isSignalValid(RCChannel::D);
     if (hasDriveSignal) {
         driveSignalInvalidSinceMs = 0;
@@ -249,15 +250,18 @@ void updateConnectionState(uint32_t nowMs) {
             CURRENT_STATE = ControlState::MANUAL_CONTROL;
             resetTofPauseTrackingStats();
             Monitor.println("=============== RC SIGNAL RESTORED ===============");
+            hasSignal = true;
         }
     } else {
         if (driveSignalInvalidSinceMs == 0U) {
             driveSignalInvalidSinceMs = nowMs;
         }
         const bool lossDebounceElapsed = (nowMs - driveSignalInvalidSinceMs) >= kRcSignalLossDebounceMs;
-        if (lossDebounceElapsed && CURRENT_STATE != ControlState::CONNECTION_LOST) {
-            CURRENT_STATE = ControlState::CONNECTION_LOST;
+        if (lossDebounceElapsed && CURRENT_STATE != ControlState::CONNECTION_LOST && hasSignal) {
+            // CURRENT_STATE = ControlState::CONNECTION_LOST;
+            // CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
             Monitor.println("=============== RC SIGNAL LOST ===============");
+            hasSignal = false;
         }
     }
 }
