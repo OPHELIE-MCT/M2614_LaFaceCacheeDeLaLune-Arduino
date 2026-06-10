@@ -50,6 +50,21 @@ enum AutoControlState {
 ControlState CURRENT_STATE = ControlState::MANUAL_CONTROL;
 AutoControlState AUTO_STATE = AutoControlState::SLOW_FORWARD;
 
+// ===== SENSOR QUERY RESULT STRUCT =====
+struct SensorSnapshot {
+    ToFDistanceMeasurement tofMeasurement;
+    LiDARSensor::QueryResult lidarAt0Deg;
+    LiDARSensor::QueryResult lidarAt90Deg;
+    LiDARSensor::QueryResult lidarAt270Deg;
+};
+
+// ===== DRIVE COMMAND STRUCT =====
+struct DriveCommands {
+    int16_t longitudinal;
+    int16_t lateral;
+    int16_t rotation;
+};
+
 struct TofPauseTracker {
     uint8_t completedStops;
     uint8_t maxStops;
@@ -208,25 +223,19 @@ void setup() {
     Monitor.println("Setup complete.");
 }
 
-void loop() {
-    inPidForwardMode = false;
-    rc.update();
-    LiDAR.update();
-    // tofDistanceSensor.update();
-    const ToFDistanceMeasurement tofMeasurement = tofDistanceSensor.getLastMeasurement();
-
-    const uint32_t nowMs = millis();
-    const uint32_t elapsedMs = nowMs - lastControlUpdateMs;
-
+// ===== SENSOR UPDATE =====
+SensorSnapshot updateSensors() {
     constexpr LiDARSensor::QueryResult defaultQueryResult = {false, 0U, 0U, -1, -1, 0U, 0U, 0U};
-    LiDARSensor::QueryResult lidarAt0Deg = defaultQueryResult;
-    LiDARSensor::QueryResult lidarAt90Deg = defaultQueryResult;
-    LiDARSensor::QueryResult lidarAt270Deg = defaultQueryResult;
+    SensorSnapshot snapshot;
+    snapshot.tofMeasurement = tofDistanceSensor.getLastMeasurement();
+    snapshot.lidarAt0Deg = LiDAR.queryAngleAt(0);
+    snapshot.lidarAt90Deg = LiDAR.queryAngleAt(90);
+    snapshot.lidarAt270Deg = LiDAR.queryAngleAt(270);
+    return snapshot;
+}
 
-    lidarAt0Deg = LiDAR.queryAngleAt(0);
-    lidarAt90Deg = LiDAR.queryAngleAt(90);
-    lidarAt270Deg = LiDAR.queryAngleAt(270);
-
+// ===== RC SIGNAL / CONNECTION MANAGEMENT =====
+void updateConnectionState(uint32_t nowMs) {
     const bool hasDriveSignal = rc.isSignalValid(RCChannel::A) && rc.isSignalValid(RCChannel::B) && rc.isSignalValid(RCChannel::D);
     if (hasDriveSignal) {
         driveSignalInvalidSinceMs = 0;
@@ -239,186 +248,194 @@ void loop() {
         if (driveSignalInvalidSinceMs == 0U) {
             driveSignalInvalidSinceMs = nowMs;
         }
-
         const bool lossDebounceElapsed = (nowMs - driveSignalInvalidSinceMs) >= kRcSignalLossDebounceMs;
         if (lossDebounceElapsed && CURRENT_STATE != ControlState::CONNECTION_LOST) {
             CURRENT_STATE = ControlState::CONNECTION_LOST;
             Monitor.println("=============== RC SIGNAL LOST ===============");
         }
     }
+}
 
-    int16_t longitudinalCommand = 0;
-    int16_t lateralCommand = 0;
-    int16_t rotationCommand = 0;
+// ===== MANUAL CONTROL =====
+DriveCommands handleManualControl() {
+    DriveCommands cmd;
+    cmd.longitudinal = applyDeadzone(rc.getJoystick(RCChannel::A), kJoystickDeadzone);
+    cmd.lateral = applyDeadzone(rc.getJoystick(RCChannel::B), kJoystickDeadzone);
+    cmd.rotation = applyDeadzone(rc.getJoystick(RCChannel::D), kJoystickDeadzone);
 
-    switch (CURRENT_STATE) {
-        case ControlState::MANUAL_CONTROL: {
-            // In manual control, we directly map RC joystick commands to mecanum drive.
-            longitudinalCommand = applyDeadzone(rc.getJoystick(RCChannel::A), kJoystickDeadzone);
-            lateralCommand = applyDeadzone(rc.getJoystick(RCChannel::B), kJoystickDeadzone);
-            rotationCommand = applyDeadzone(rc.getJoystick(RCChannel::D), kJoystickDeadzone);
+    static bool wasAutoSwitchPressed = false;
+    static uint32_t lastAutoSwitchLogMs = 0;
+    const bool hasAutoSwitchSignal = rc.isSignalValid(RCChannel::E) && rc.isSignalValid(RCChannel::F);
+    const bool isAutoSwitchPressed = hasAutoSwitchSignal && rc.getButton(RCChannel::E, kButtonPressThresholdUs) && rc.getButton(RCChannel::F, kButtonPressThresholdUs);
+    const uint16_t pulseE = rc.getPulseWidthUs(RCChannel::E);
+    const uint16_t pulseF = rc.getPulseWidthUs(RCChannel::F);
 
-            // If we press both joystick buttons, we switch to automatic control mode.
-            static bool wasAutoSwitchPressed = false;
-            static uint32_t lastAutoSwitchLogMs = 0;
-            const bool hasAutoSwitchSignal = rc.isSignalValid(RCChannel::E) && rc.isSignalValid(RCChannel::F);
-            const bool isAutoSwitchPressed = hasAutoSwitchSignal && rc.getButton(RCChannel::E, kButtonPressThresholdUs) && rc.getButton(RCChannel::F, kButtonPressThresholdUs);
-            const uint16_t pulseE = rc.getPulseWidthUs(RCChannel::E);
-            const uint16_t pulseF = rc.getPulseWidthUs(RCChannel::F);
-
-            if (isAutoSwitchPressed && !wasAutoSwitchPressed) {
-                CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
-                AUTO_STATE = AutoControlState::SLOW_FORWARD;
-                configureTofPauseSegment(3U, "SLOW_FORWARD", AutoControlState::SLOW_FORWARD);
-                Monitor.println("=============== SWITCHING TO AUTOMATIC CONTROL MODE ===============");
-            }
-            wasAutoSwitchPressed = isAutoSwitchPressed;
-            break;
-        }
-        case ControlState::AUTOMATIC_CONTROL:
-
-            switch (AUTO_STATE) {
-                case AutoControlState::SLOW_FORWARD:
-                    if (prevAutoState != AUTO_STATE) {
-                        pidFL.reset();
-                        pidFR.reset();
-                        pidRL.reset();
-                        pidRR.reset();
-                        pidWheelCommands = {0, 0, 0, 0};
-                    }
-                    inPidForwardMode = true;
-
-                    if (hasRemainingTofPauseBudget()) {
-                        if (tofMeasurement.isValid && !tofMeasurement.isThresholdReached) {
-                            tofPauseTracker.pauseArmed = true;
-                            tofPauseTracker.stopPending = false;
-                            tofPauseTracker.stopPendingSinceMs = 0U;
-                        } else if (tofMeasurement.isValid && tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
-                            if (!tofPauseTracker.stopPending) {
-                                tofPauseTracker.stopPending = true;
-                                tofPauseTracker.stopPendingSinceMs = nowMs;
-                            }
-
-                            if ((nowMs - tofPauseTracker.stopPendingSinceMs) >= kTofRisingEdgeStopDelayMs) {
-                                pidWheelCommands = {0, 0, 0, 0};
-                                enterTofPauseStop(AutoControlState::SLOW_FORWARD, nowMs);
-                            }
-                        }
-                    }
-
-                    if (lidarAt0Deg.found && lidarAt0Deg.distance_mm < 25) {
-                        clearTofPauseTracking();
-                        AUTO_STATE = AutoControlState::TURN;
-                        Monitor.println("[DEBUG] Transitioning to TURN: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/25 mm");
-                    }
-                    break;
-                case AutoControlState::TURN:
-                    longitudinalCommand = 0;
-                    lateralCommand = 0;
-                    rotationCommand = -150;
-                    if (lidarAt0Deg.found && lidarAt0Deg.distance_mm > 430) {
-                        AUTO_STATE = AutoControlState::REPOSITION;
-                        Monitor.println("[DEBUG] Transitioning to REPOSITION: Path ahead at 0° is " + String(lidarAt0Deg.distance_mm) + "mm");
-                    }
-                    break;
-                case AutoControlState::REPOSITION:
-                    longitudinalCommand = 50;
-                    lateralCommand = 225;
-                    rotationCommand = 0;
-                    // Do that for 3 seconds, then stop
-                    static uint32_t repositionStartMs = 0;
-                    if (repositionStartMs == 0U) {
-                        repositionStartMs = nowMs;
-                    }
-                    if ((nowMs - repositionStartMs) >= 3000) {
-                        AUTO_STATE = AutoControlState::SLOW_FORWARD_2;
-                        configureTofPauseSegment(1U, "SLOW_FORWARD_2", AutoControlState::SLOW_FORWARD_2);
-                        repositionStartMs = 0U;
-                        Monitor.println("[DEBUG] Transitioning to SLOW_FORWARD_2: Completed repositioning maneuver");
-                    }
-                    break;
-                case AutoControlState::SLOW_FORWARD_2:
-                    if (prevAutoState != AUTO_STATE) {
-                        pidFL.reset();
-                        pidFR.reset();
-                        pidRL.reset();
-                        pidRR.reset();
-                        pidWheelCommands = {0, 0, 0, 0};
-                    }
-                    inPidForwardMode = true;
-
-                    if (hasRemainingTofPauseBudget()) {
-                        if (tofMeasurement.isValid && !tofMeasurement.isThresholdReached) {
-                            tofPauseTracker.pauseArmed = true;
-                            tofPauseTracker.stopPending = false;
-                            tofPauseTracker.stopPendingSinceMs = 0U;
-                        } else if (tofMeasurement.isValid && tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
-                            if (!tofPauseTracker.stopPending) {
-                                tofPauseTracker.stopPending = true;
-                                tofPauseTracker.stopPendingSinceMs = nowMs;
-                            }
-
-                            if ((nowMs - tofPauseTracker.stopPendingSinceMs) >= kTofRisingEdgeStopDelayMs) {
-                                pidWheelCommands = {0, 0, 0, 0};
-                                enterTofPauseStop(AutoControlState::SLOW_FORWARD_2, nowMs);
-                            }
-                        }
-                    }
-
-                    if (lidarAt0Deg.found && lidarAt0Deg.distance_mm < 25) {
-                        clearTofPauseTracking();
-                        AUTO_STATE = AutoControlState::EXIT_TURN;
-                        Monitor.println("[DEBUG] Transitioning to EXIT_TURN: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/25 mm");
-                    }
-                    break;
-                case AutoControlState::TOF_PAUSE_STOP:
-                    longitudinalCommand = 0;
-                    lateralCommand = 0;
-                    rotationCommand = 0;
-                    if ((nowMs - tofPauseTracker.pauseStartMs) >= kTofPauseDurationMs) {
-                        AUTO_STATE = tofPauseTracker.resumeState;
-                        tofPauseTracker.pauseStartMs = 0U;
-                        Monitor.println(
-                            String("[DEBUG] Leaving TOF_PAUSE_STOP, resuming ") +
-                            String(autoStateName(AUTO_STATE)) +
-                            " | completed stops=" + String(tofPauseTracker.completedStops) + "/" + String(tofPauseTracker.maxStops));
-                    }
-                    break;
-                case AutoControlState::EXIT_TURN:
-                    longitudinalCommand = 0;
-                    lateralCommand = 0;
-                    rotationCommand = -150;
-                    if (lidarAt0Deg.found && lidarAt0Deg.distance_mm > 2000) {
-                        AUTO_STATE = AutoControlState::EXIT_FORWARD;
-                        Monitor.println("[DEBUG] Transitioning to EXIT_FORWARD: Path ahead at 0° is clear beyond " + String(lidarAt0Deg.distance_mm) + "mm");
-                    }
-                    break;
-                case AutoControlState::EXIT_FORWARD:
-                    longitudinalCommand = 250;
-                    lateralCommand = 0;
-                    rotationCommand = 0;
-                    if (lidarAt0Deg.found && lidarAt0Deg.distance_mm < 350) {
-                        clearTofPauseTracking();
-                        AUTO_STATE = AutoControlState::STOP;
-                        Monitor.println("[DEBUG] Transitioning to STOP: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/350 mm");
-                    }
-                    break;
-                case AutoControlState::STOP:
-                    clearTofPauseTracking();
-                    mecanumDriver.stop();
-                    CURRENT_STATE = ControlState::MANUAL_CONTROL;
-                    resetTofPauseTrackingStats();
-                    Monitor.println("=============== SWITCHING TO MANUAL CONTROL MODE ===============");
-                    break;
-            }
-            prevAutoState = AUTO_STATE;
-            break;
-        case ControlState::CONNECTION_LOST:
-            // We should never reach this case due to the hasDriveSignal check above, but we include it for completeness.
-            mecanumDriver.stop();
-            return;
+    if (isAutoSwitchPressed && !wasAutoSwitchPressed) {
+        CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
+        AUTO_STATE = AutoControlState::SLOW_FORWARD;
+        configureTofPauseSegment(3U, "SLOW_FORWARD", AutoControlState::SLOW_FORWARD);
+        Monitor.println("=============== SWITCHING TO AUTOMATIC CONTROL MODE ===============");
     }
+    wasAutoSwitchPressed = isAutoSwitchPressed;
+    return cmd;
+}
 
+// ===== TOF PAUSE LOGIC (shared by SLOW_FORWARD states) =====
+void handleTofPause(AutoControlState resumeState, const ToFDistanceMeasurement& tofMeasurement, uint32_t nowMs) {
+    if (!hasRemainingTofPauseBudget()) return;
+
+    if (tofMeasurement.isValid && !tofMeasurement.isThresholdReached) {
+        tofPauseTracker.pauseArmed = true;
+        tofPauseTracker.stopPending = false;
+        tofPauseTracker.stopPendingSinceMs = 0U;
+    } else if (tofMeasurement.isValid && tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
+        if (!tofPauseTracker.stopPending) {
+            tofPauseTracker.stopPending = true;
+            tofPauseTracker.stopPendingSinceMs = nowMs;
+        }
+        if ((nowMs - tofPauseTracker.stopPendingSinceMs) >= kTofRisingEdgeStopDelayMs) {
+            pidWheelCommands = {0, 0, 0, 0};
+            enterTofPauseStop(resumeState, nowMs);
+        }
+    }
+}
+
+// ===== AUTO STATE HANDLERS =====
+DriveCommands handleAutoSlowForward(const SensorSnapshot& sensors, uint32_t nowMs) {
+    if (prevAutoState != AUTO_STATE) {
+        pidFL.reset();
+        pidFR.reset();
+        pidRL.reset();
+        pidRR.reset();
+        pidWheelCommands = {0, 0, 0, 0};
+    }
+    inPidForwardMode = true;
+
+    handleTofPause(AutoControlState::SLOW_FORWARD, sensors.tofMeasurement, nowMs);
+
+    if (sensors.lidarAt0Deg.found && sensors.lidarAt0Deg.distance_mm < 25) {
+        clearTofPauseTracking();
+        AUTO_STATE = AutoControlState::TURN;
+        Monitor.println("[DEBUG] Transitioning to TURN: Obstacle detected at 0° at " + String(sensors.lidarAt0Deg.distance_mm) + "/25 mm");
+    }
+    return {0, 0, 0};
+}
+
+DriveCommands handleAutoTurn(const SensorSnapshot& sensors) {
+    if (sensors.lidarAt0Deg.found && sensors.lidarAt0Deg.distance_mm > 430) {
+        AUTO_STATE = AutoControlState::REPOSITION;
+        Monitor.println("[DEBUG] Transitioning to REPOSITION: Path ahead at 0° is " + String(sensors.lidarAt0Deg.distance_mm) + "mm");
+    }
+    return {0, 0, -150};
+}
+
+DriveCommands handleAutoReposition(const SensorSnapshot& sensors, uint32_t nowMs) {
+    static uint32_t repositionStartMs = 0;
+    if (repositionStartMs == 0U) {
+        repositionStartMs = nowMs;
+    }
+    if ((nowMs - repositionStartMs) >= 3000) {
+        AUTO_STATE = AutoControlState::SLOW_FORWARD_2;
+        configureTofPauseSegment(1U, "SLOW_FORWARD_2", AutoControlState::SLOW_FORWARD_2);
+        repositionStartMs = 0U;
+        Monitor.println("[DEBUG] Transitioning to SLOW_FORWARD_2: Completed repositioning maneuver");
+    }
+    return {50, 225, 0};
+}
+
+DriveCommands handleAutoSlowForward2(const SensorSnapshot& sensors, uint32_t nowMs) {
+    if (prevAutoState != AUTO_STATE) {
+        pidFL.reset();
+        pidFR.reset();
+        pidRL.reset();
+        pidRR.reset();
+        pidWheelCommands = {0, 0, 0, 0};
+    }
+    inPidForwardMode = true;
+
+    handleTofPause(AutoControlState::SLOW_FORWARD_2, sensors.tofMeasurement, nowMs);
+
+    if (sensors.lidarAt0Deg.found && sensors.lidarAt0Deg.distance_mm < 25) {
+        clearTofPauseTracking();
+        AUTO_STATE = AutoControlState::EXIT_TURN;
+        Monitor.println("[DEBUG] Transitioning to EXIT_TURN: Obstacle detected at 0° at " + String(sensors.lidarAt0Deg.distance_mm) + "/25 mm");
+    }
+    return {0, 0, 0};
+}
+
+DriveCommands handleAutoTofPauseStop(uint32_t nowMs) {
+    if ((nowMs - tofPauseTracker.pauseStartMs) >= kTofPauseDurationMs) {
+        AUTO_STATE = tofPauseTracker.resumeState;
+        tofPauseTracker.pauseStartMs = 0U;
+        Monitor.println(
+            String("[DEBUG] Leaving TOF_PAUSE_STOP, resuming ") +
+            String(autoStateName(AUTO_STATE)) +
+            " | completed stops=" + String(tofPauseTracker.completedStops) + "/" + String(tofPauseTracker.maxStops));
+    }
+    return {0, 0, 0};
+}
+
+DriveCommands handleAutoExitTurn(const SensorSnapshot& sensors) {
+    if (sensors.lidarAt0Deg.found && sensors.lidarAt0Deg.distance_mm > 2000) {
+        AUTO_STATE = AutoControlState::EXIT_FORWARD;
+        Monitor.println("[DEBUG] Transitioning to EXIT_FORWARD: Path ahead at 0° is clear beyond " + String(sensors.lidarAt0Deg.distance_mm) + "mm");
+    }
+    return {0, 0, -150};
+}
+
+DriveCommands handleAutoExitForward(const SensorSnapshot& sensors) {
+    if (sensors.lidarAt0Deg.found && sensors.lidarAt0Deg.distance_mm < 350) {
+        clearTofPauseTracking();
+        AUTO_STATE = AutoControlState::STOP;
+        Monitor.println("[DEBUG] Transitioning to STOP: Obstacle detected at 0° at " + String(sensors.lidarAt0Deg.distance_mm) + "/350 mm");
+    }
+    return {250, 0, 0};
+}
+
+DriveCommands handleAutoStop() {
+    clearTofPauseTracking();
+    mecanumDriver.stop();
+    CURRENT_STATE = ControlState::MANUAL_CONTROL;
+    resetTofPauseTrackingStats();
+    Monitor.println("=============== SWITCHING TO MANUAL CONTROL MODE ===============");
+    return {0, 0, 0};
+}
+
+// ===== AUTOMATIC CONTROL DISPATCHER =====
+DriveCommands handleAutomaticControl(const SensorSnapshot& sensors, uint32_t nowMs) {
+    DriveCommands cmd = {0, 0, 0};
+    switch (AUTO_STATE) {
+        case AutoControlState::SLOW_FORWARD:
+            cmd = handleAutoSlowForward(sensors, nowMs);
+            break;
+        case AutoControlState::TURN:
+            cmd = handleAutoTurn(sensors);
+            break;
+        case AutoControlState::REPOSITION:
+            cmd = handleAutoReposition(sensors, nowMs);
+            break;
+        case AutoControlState::SLOW_FORWARD_2:
+            cmd = handleAutoSlowForward2(sensors, nowMs);
+            break;
+        case AutoControlState::TOF_PAUSE_STOP:
+            cmd = handleAutoTofPauseStop(nowMs);
+            break;
+        case AutoControlState::EXIT_TURN:
+            cmd = handleAutoExitTurn(sensors);
+            break;
+        case AutoControlState::EXIT_FORWARD:
+            cmd = handleAutoExitForward(sensors);
+            break;
+        case AutoControlState::STOP:
+            cmd = handleAutoStop();
+            break;
+    }
+    prevAutoState = AUTO_STATE;
+    return cmd;
+}
+
+// ===== DRIVE OUTPUT =====
+void applyDriveCommands(const DriveCommands& cmd) {
     if (inPidForwardMode) {
         // PID mode: drive wheels directly from last PID output — no mix(), no scaling.
         mecanumDriver.driveWheels(
@@ -427,31 +444,25 @@ void loop() {
             pidWheelCommands.rearLeft,
             pidWheelCommands.rearRight);
     } else {
-        const MecanumDriver::WheelCommands targetWheelCommands = MecanumDriver::mix(lateralCommand, longitudinalCommand, rotationCommand);
-
-        float frontLeftCommand = static_cast<float>(targetWheelCommands.frontLeft);
-        float frontRightCommand = static_cast<float>(targetWheelCommands.frontRight);
-        float rearLeftCommand = static_cast<float>(targetWheelCommands.rearLeft);
-        float rearRightCommand = static_cast<float>(targetWheelCommands.rearRight);
+        const MecanumDriver::WheelCommands targetWheelCommands = MecanumDriver::mix(cmd.lateral, cmd.longitudinal, cmd.rotation);
 
         constexpr float speedScalingFactor = 0.65f;
         constexpr float speedOffset = 0.0f;
-        frontLeftCommand = frontLeftCommand * speedScalingFactor + speedOffset;
-        frontRightCommand = frontRightCommand * speedScalingFactor + speedOffset;
-        rearLeftCommand = rearLeftCommand * speedScalingFactor + speedOffset;
-        rearRightCommand = rearRightCommand * speedScalingFactor + speedOffset;
+        const int16_t fl = static_cast<int16_t>(static_cast<float>(targetWheelCommands.frontLeft) * speedScalingFactor + speedOffset);
+        const int16_t fr = static_cast<int16_t>(static_cast<float>(targetWheelCommands.frontRight) * speedScalingFactor + speedOffset);
+        const int16_t rl = static_cast<int16_t>(static_cast<float>(targetWheelCommands.rearLeft) * speedScalingFactor + speedOffset);
+        const int16_t rr = static_cast<int16_t>(static_cast<float>(targetWheelCommands.rearRight) * speedScalingFactor + speedOffset);
 
-        mecanumDriver.driveWheels(static_cast<int16_t>(frontLeftCommand), static_cast<int16_t>(frontRightCommand), static_cast<int16_t>(rearLeftCommand), static_cast<int16_t>(rearRightCommand));
+        mecanumDriver.driveWheels(fl, fr, rl, rr);
     }
+}
 
-    // ===== DEBUG PRINT ZONE =====
-    if (elapsedMs < kDebugPrintDelayMs) return;
-    lastControlUpdateMs = nowMs;
+// ===== PID UPDATE =====
+void updatePid() {
     tofDistanceSensor.update();
     EncoderSpeedSnapshot feedbackEncoderSnapshot = feedbackEncoder.getCurrentSpeed();
     // debug_print::printEncoderPulsesPer50Ms(feedbackEncoderSnapshot);
 
-    // ===== PID UPDATE (every 50 ms, synchronized with encoder sample window) =====
     if (inPidForwardMode) {
         const WheelSpeedTargets& target = kSlowForwardTargets;
         constexpr float kDtSeconds = static_cast<float>(FeedbackEncoder::kSamplePeriodMs) / 1000.0f;
@@ -475,8 +486,46 @@ void loop() {
         //     " RL=" + String(rearLeftCorrection) +
         //     " RR=" + String(rearRightCorrection));
     }
-    // debug_print::printDetailedLidarDistances(LiDAR, lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
-    // debug_print::printTofMeasurement(tofMeasurement, tofDistanceSensor.getLastStatusCode(), tofDistanceSensor.getThresholdMm());
+}
+
+void loop() {
+    inPidForwardMode = false;
+    rc.update();
+    LiDAR.update();
+    // tofDistanceSensor.update();
+
+    const uint32_t nowMs = millis();
+    const uint32_t elapsedMs = nowMs - lastControlUpdateMs;
+
+    const SensorSnapshot sensors = updateSensors();
+
+    updateConnectionState(nowMs);
+
+    DriveCommands cmd = {0, 0, 0};
+
+    switch (CURRENT_STATE) {
+        case ControlState::MANUAL_CONTROL:
+            cmd = handleManualControl();
+            break;
+        case ControlState::AUTOMATIC_CONTROL:
+            cmd = handleAutomaticControl(sensors, nowMs);
+            break;
+        case ControlState::CONNECTION_LOST:
+            mecanumDriver.stop();
+            return;
+    }
+
+    applyDriveCommands(cmd);
+
+    // ===== DEBUG PRINT ZONE =====
+    if (elapsedMs < kDebugPrintDelayMs) return;
+    lastControlUpdateMs = nowMs;
+
+    // ===== PID UPDATE (every 50 ms, synchronized with encoder sample window) =====
+    updatePid();
+
+    // debug_print::printDetailedLidarDistances(LiDAR, sensors.lidarAt0Deg, sensors.lidarAt90Deg, sensors.lidarAt270Deg);
+    // debug_print::printTofMeasurement(sensors.tofMeasurement, tofDistanceSensor.getLastStatusCode(), tofDistanceSensor.getThresholdMm());
     // Monitor.println(
     //     String("[DEBUG] Auto state=") + String(autoStateName(AUTO_STATE)) +
     //     " | ToF stops=" + String(tofPauseTracker.completedStops) + "/" + String(tofPauseTracker.maxStops) +
