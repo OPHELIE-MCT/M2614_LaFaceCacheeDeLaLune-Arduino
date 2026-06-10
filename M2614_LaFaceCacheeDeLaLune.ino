@@ -54,7 +54,9 @@ struct TofPauseTracker {
     uint8_t completedStops;
     uint8_t maxStops;
     bool pauseArmed;
+    bool stopPending;
     uint32_t pauseStartMs;
+    uint32_t stopPendingSinceMs;
     AutoControlState resumeState;
     const char* segmentLabel;
 };
@@ -62,6 +64,7 @@ struct TofPauseTracker {
 constexpr uint32_t kDebugPrintDelayMs = 50;
 constexpr uint32_t kRcSignalLossDebounceMs = 250;
 constexpr uint32_t kTofPauseDurationMs = 2000;
+constexpr uint32_t kTofRisingEdgeStopDelayMs = 120;
 constexpr int16_t kJoystickDeadzone = 30;
 constexpr uint16_t kButtonPressThresholdUs = 1850;
 constexpr int16_t kTofSlowLongitudinalCommand = 85;
@@ -70,7 +73,7 @@ constexpr float kToFStopThresholdMm = ToFDistanceSensor::kDefaultThresholdMm;
 
 uint32_t lastControlUpdateMs = 0;
 uint32_t driveSignalInvalidSinceMs = 0;
-TofPauseTracker tofPauseTracker = {0U, 0U, false, 0U, AutoControlState::SLOW_FORWARD, nullptr};
+TofPauseTracker tofPauseTracker = {0U, 0U, false, false, 0U, 0U, AutoControlState::SLOW_FORWARD, nullptr};
 
 // ===== PID SPEED CONTROLLER =====
 // Gains and clamps are shared across all four wheels. Tune kp/ki/kd on the robot;
@@ -98,10 +101,8 @@ PIDSpeedController pidRR(kWheelPidConfig);
 
 // Per-segment wheel speed targets (pulses / 50 ms).
 // SLOW_FORWARD: FL/RR slightly higher to replicate the old lateralCommand=25 drift.
-// SLOW_FORWARD_2: balanced, no lateral component.
 // Adjust these values based on observed encoder readings at the desired speed.
 constexpr WheelSpeedTargets kSlowForwardTargets = {20.0f, 12.0f, 12.0f, 20.0f};
-constexpr WheelSpeedTargets kSlowForward2Targets = {16.0f, 16.0f, 16.0f, 16.0f};
 
 // Last PID wheel command, updated every 50 ms and held between updates.
 MecanumDriver::WheelCommands pidWheelCommands = {0, 0, 0, 0};
@@ -143,14 +144,18 @@ void configureTofPauseSegment(uint8_t maxStops, const char* segmentLabel, AutoCo
     tofPauseTracker.completedStops = 0U;
     tofPauseTracker.maxStops = maxStops;
     tofPauseTracker.pauseArmed = false;
+    tofPauseTracker.stopPending = false;
     tofPauseTracker.pauseStartMs = 0U;
+    tofPauseTracker.stopPendingSinceMs = 0U;
     tofPauseTracker.resumeState = resumeState;
     tofPauseTracker.segmentLabel = segmentLabel;
 }
 
 void clearTofPauseTracking() {
     tofPauseTracker.pauseArmed = false;
+    tofPauseTracker.stopPending = false;
     tofPauseTracker.pauseStartMs = 0U;
+    tofPauseTracker.stopPendingSinceMs = 0U;
     tofPauseTracker.maxStops = 0U;
     tofPauseTracker.segmentLabel = nullptr;
 }
@@ -159,7 +164,9 @@ void resetTofPauseTrackingStats() {
     tofPauseTracker.completedStops = 0U;
     tofPauseTracker.maxStops = 0U;
     tofPauseTracker.pauseArmed = false;
+    tofPauseTracker.stopPending = false;
     tofPauseTracker.pauseStartMs = 0U;
+    tofPauseTracker.stopPendingSinceMs = 0U;
     tofPauseTracker.resumeState = AutoControlState::SLOW_FORWARD;
     tofPauseTracker.segmentLabel = nullptr;
 }
@@ -172,6 +179,8 @@ void enterTofPauseStop(AutoControlState resumeState, uint32_t nowMs) {
     tofPauseTracker.resumeState = resumeState;
     tofPauseTracker.pauseStartMs = nowMs;
     tofPauseTracker.pauseArmed = false;
+    tofPauseTracker.stopPending = false;
+    tofPauseTracker.stopPendingSinceMs = 0U;
     if (tofPauseTracker.completedStops < UINT8_MAX) {
         ++tofPauseTracker.completedStops;
     }
@@ -280,8 +289,20 @@ void loop() {
                     inPidForwardMode = true;
 
                     if (hasRemainingTofPauseBudget()) {
-                        if (tofMeasurement.isValid && tofMeasurement.isThresholdReached) {
+                        if (tofMeasurement.isValid && !tofMeasurement.isThresholdReached) {
                             tofPauseTracker.pauseArmed = true;
+                            tofPauseTracker.stopPending = false;
+                            tofPauseTracker.stopPendingSinceMs = 0U;
+                        } else if (tofMeasurement.isValid && tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
+                            if (!tofPauseTracker.stopPending) {
+                                tofPauseTracker.stopPending = true;
+                                tofPauseTracker.stopPendingSinceMs = nowMs;
+                            }
+
+                            if ((nowMs - tofPauseTracker.stopPendingSinceMs) >= kTofRisingEdgeStopDelayMs) {
+                                pidWheelCommands = {0, 0, 0, 0};
+                                enterTofPauseStop(AutoControlState::SLOW_FORWARD, nowMs);
+                            }
                         }
                     }
 
@@ -289,9 +310,6 @@ void loop() {
                         clearTofPauseTracking();
                         AUTO_STATE = AutoControlState::TURN;
                         Monitor.println("[DEBUG] Transitioning to TURN: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/25 mm");
-                    } else if (hasRemainingTofPauseBudget() && tofMeasurement.isValid && !tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
-                        pidWheelCommands = {0, 0, 0, 0};
-                        enterTofPauseStop(AutoControlState::SLOW_FORWARD, nowMs);
                     }
                     break;
                 case AutoControlState::TURN:
@@ -330,8 +348,20 @@ void loop() {
                     inPidForwardMode = true;
 
                     if (hasRemainingTofPauseBudget()) {
-                        if (tofMeasurement.isValid && tofMeasurement.isThresholdReached) {
+                        if (tofMeasurement.isValid && !tofMeasurement.isThresholdReached) {
                             tofPauseTracker.pauseArmed = true;
+                            tofPauseTracker.stopPending = false;
+                            tofPauseTracker.stopPendingSinceMs = 0U;
+                        } else if (tofMeasurement.isValid && tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
+                            if (!tofPauseTracker.stopPending) {
+                                tofPauseTracker.stopPending = true;
+                                tofPauseTracker.stopPendingSinceMs = nowMs;
+                            }
+
+                            if ((nowMs - tofPauseTracker.stopPendingSinceMs) >= kTofRisingEdgeStopDelayMs) {
+                                pidWheelCommands = {0, 0, 0, 0};
+                                enterTofPauseStop(AutoControlState::SLOW_FORWARD_2, nowMs);
+                            }
                         }
                     }
 
@@ -339,9 +369,6 @@ void loop() {
                         clearTofPauseTracking();
                         AUTO_STATE = AutoControlState::EXIT_TURN;
                         Monitor.println("[DEBUG] Transitioning to EXIT_TURN: Obstacle detected at 0° at " + String(lidarAt0Deg.distance_mm) + "/25 mm");
-                    } else if (hasRemainingTofPauseBudget() && tofMeasurement.isValid && !tofMeasurement.isThresholdReached && tofPauseTracker.pauseArmed) {
-                        pidWheelCommands = {0, 0, 0, 0};
-                        enterTofPauseStop(AutoControlState::SLOW_FORWARD_2, nowMs);
                     }
                     break;
                 case AutoControlState::TOF_PAUSE_STOP:
@@ -422,11 +449,11 @@ void loop() {
     lastControlUpdateMs = nowMs;
     tofDistanceSensor.update();
     EncoderSpeedSnapshot feedbackEncoderSnapshot = feedbackEncoder.getCurrentSpeed();
-    debug_print::printEncoderPulsesPer50Ms(feedbackEncoderSnapshot);
+    // debug_print::printEncoderPulsesPer50Ms(feedbackEncoderSnapshot);
 
     // ===== PID UPDATE (every 50 ms, synchronized with encoder sample window) =====
     if (inPidForwardMode) {
-        const WheelSpeedTargets& target = (AUTO_STATE == AutoControlState::SLOW_FORWARD) ? kSlowForwardTargets : kSlowForward2Targets;
+        const WheelSpeedTargets& target = kSlowForwardTargets;
         constexpr float kDtSeconds = static_cast<float>(FeedbackEncoder::kSamplePeriodMs) / 1000.0f;
         const int16_t frontLeftCorrection = static_cast<int16_t>(pidFL.update(target.frontLeft, static_cast<float>(feedbackEncoderSnapshot.frontLeft), kDtSeconds));
         const int16_t frontRightCorrection = static_cast<int16_t>(pidFR.update(target.frontRight, static_cast<float>(feedbackEncoderSnapshot.frontRight), kDtSeconds));
@@ -449,7 +476,6 @@ void loop() {
         //     " RR=" + String(rearRightCorrection));
     }
     // debug_print::printDetailedLidarDistances(LiDAR, lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
-    // debug_print::printLidarDistances(lidarAt0Deg, lidarAt90Deg, lidarAt270Deg);
     // debug_print::printTofMeasurement(tofMeasurement, tofDistanceSensor.getLastStatusCode(), tofDistanceSensor.getThresholdMm());
     // Monitor.println(
     //     String("[DEBUG] Auto state=") + String(autoStateName(AUTO_STATE)) +
