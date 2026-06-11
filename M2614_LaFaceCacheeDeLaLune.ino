@@ -102,10 +102,10 @@ TofPauseTracker tofPauseTracker = {0U, 0U, false, false, 0U, 0U, AutoControlStat
 // outputMin is 0 because the encoder has no direction sensing (channel B only).
 constexpr SpeedControllerConfig kWheelPidConfig = {
     /* kp          */ 2.0f,
-    /* ki          */ 0.0f,
+    /* ki          */ 0.20f,
     /* kd          */ 0.0f,
-    /* integralMin */ -200.0f,
-    /* integralMax */ 200.0f,
+    /* integralMin */ -90.0f,
+    /* integralMax */ 90.0f,
     /* outputMin   */ -120.0f,
     /* outputMax   */ 120.0f,
 };
@@ -114,6 +114,12 @@ constexpr SpeedControllerConfig kWheelPidConfig = {
 // The PID output is a correction added on top of this baseline instead of the
 // final wheel command itself.
 constexpr int16_t kWheelPidBaseCommand = 50;
+
+constexpr float kStallTargetThreshold = 6.0f;
+constexpr int32_t kStallMeasuredThreshold = 2;
+constexpr uint8_t kStallDetectCycles = 6;
+constexpr uint32_t kStallBoostDurationMs = 250;
+constexpr int16_t kStallBoostCommand = 170;
 
 PIDSpeedController pidFL(kWheelPidConfig);
 PIDSpeedController pidFR(kWheelPidConfig);
@@ -131,12 +137,52 @@ MecanumDriver::WheelCommands pidWheelCommands = {0, 0, 0, 0};
 // True when the active AUTO_STATE uses per-wheel PID; skips mix() in the drive path.
 bool inPidForwardMode = false;
 
+uint8_t pidStallCounters[4] = {0, 0, 0, 0};
+uint32_t pidStallBoostUntilMs[4] = {0U, 0U, 0U, 0U};
+
 // Tracks the previous AUTO_STATE to detect state entries (used to reset PIDs).
 AutoControlState prevAutoState = AutoControlState::SLOW_FORWARD;
 
 // Sorter latch: set on RC F falling edge while in MANUAL_CONTROL, reset outside manual.
 bool isBallSorterEnabled = false;
 bool previousSorterButtonPressed = false;
+
+void resetPidStallRecovery() {
+    for (uint8_t i = 0; i < 4; ++i) {
+        pidStallCounters[i] = 0;
+        pidStallBoostUntilMs[i] = 0U;
+    }
+}
+
+void applyPidStallRecovery(uint8_t wheelIndex, float target, int32_t measured, int16_t& command, uint32_t nowMs) {
+    if (target < kStallTargetThreshold) {
+        pidStallCounters[wheelIndex] = 0;
+        pidStallBoostUntilMs[wheelIndex] = 0U;
+        return;
+    }
+
+    if (measured <= kStallMeasuredThreshold) {
+        if (pidStallCounters[wheelIndex] < UINT8_MAX) {
+            ++pidStallCounters[wheelIndex];
+        }
+        if (pidStallCounters[wheelIndex] >= kStallDetectCycles) {
+            pidStallBoostUntilMs[wheelIndex] = nowMs + kStallBoostDurationMs;
+        }
+    } else {
+        pidStallCounters[wheelIndex] = 0;
+    }
+
+    const uint32_t boostUntilMs = pidStallBoostUntilMs[wheelIndex];
+    if (boostUntilMs != 0U) {
+        if (static_cast<int32_t>(nowMs - boostUntilMs) < 0) {
+            if (command < kStallBoostCommand) {
+                command = kStallBoostCommand;
+            }
+        } else {
+            pidStallBoostUntilMs[wheelIndex] = 0U;
+        }
+    }
+}
 
 int16_t applyDeadzone(int16_t value, int16_t deadzone) {
     return (value > -deadzone && value < deadzone) ? 0 : value;
@@ -340,6 +386,7 @@ DriveCommands handleAutoSlowForward(const SensorSnapshot& sensors, uint32_t nowM
         pidFR.reset();
         pidRL.reset();
         pidRR.reset();
+        resetPidStallRecovery();
         pidWheelCommands = {0, 0, 0, 0};
     }
     inPidForwardMode = true;
@@ -382,6 +429,7 @@ DriveCommands handleAutoSlowForward2(const SensorSnapshot& sensors, uint32_t now
         pidFR.reset();
         pidRL.reset();
         pidRR.reset();
+        resetPidStallRecovery();
         pidWheelCommands = {0, 0, 0, 0};
     }
     inPidForwardMode = true;
@@ -498,16 +546,29 @@ void updatePid() {
 
     if (inPidForwardMode) {
         const WheelSpeedTargets& target = kSlowForwardTargets;
+        const uint32_t nowMs = millis();
         constexpr float kDtSeconds = static_cast<float>(FeedbackEncoder::kSamplePeriodMs) / 1000.0f;
         const int16_t frontLeftCorrection = static_cast<int16_t>(pidFL.update(target.frontLeft, static_cast<float>(feedbackEncoderSnapshot.frontLeft), kDtSeconds));
         const int16_t frontRightCorrection = static_cast<int16_t>(pidFR.update(target.frontRight, static_cast<float>(feedbackEncoderSnapshot.frontRight), kDtSeconds));
         const int16_t rearLeftCorrection = static_cast<int16_t>(pidRL.update(target.rearLeft, static_cast<float>(feedbackEncoderSnapshot.rearLeft), kDtSeconds));
         const int16_t rearRightCorrection = static_cast<int16_t>(pidRR.update(target.rearRight, static_cast<float>(feedbackEncoderSnapshot.rearRight), kDtSeconds));
 
-        pidWheelCommands.frontLeft = constrain(static_cast<int16_t>(kWheelPidBaseCommand + frontLeftCorrection), 0, 500);
-        pidWheelCommands.frontRight = constrain(static_cast<int16_t>(kWheelPidBaseCommand + frontRightCorrection), 0, 500);
-        pidWheelCommands.rearLeft = constrain(static_cast<int16_t>(kWheelPidBaseCommand + rearLeftCorrection), 0, 500);
-        pidWheelCommands.rearRight = constrain(static_cast<int16_t>(kWheelPidBaseCommand + rearRightCorrection), 0, 500);
+        int16_t frontLeftCommand = constrain(static_cast<int16_t>(kWheelPidBaseCommand + frontLeftCorrection), 0, 500);
+        int16_t frontRightCommand = constrain(static_cast<int16_t>(kWheelPidBaseCommand + frontRightCorrection), 0, 500);
+        int16_t rearLeftCommand = constrain(static_cast<int16_t>(kWheelPidBaseCommand + rearLeftCorrection), 0, 500);
+        int16_t rearRightCommand = constrain(static_cast<int16_t>(kWheelPidBaseCommand + rearRightCorrection), 0, 500);
+
+        applyPidStallRecovery(0, target.frontLeft, feedbackEncoderSnapshot.frontLeft, frontLeftCommand, nowMs);
+        applyPidStallRecovery(1, target.frontRight, feedbackEncoderSnapshot.frontRight, frontRightCommand, nowMs);
+        applyPidStallRecovery(2, target.rearLeft, feedbackEncoderSnapshot.rearLeft, rearLeftCommand, nowMs);
+        applyPidStallRecovery(3, target.rearRight, feedbackEncoderSnapshot.rearRight, rearRightCommand, nowMs);
+
+        pidWheelCommands.frontLeft = frontLeftCommand;
+        pidWheelCommands.frontRight = frontRightCommand;
+        pidWheelCommands.rearLeft = rearLeftCommand;
+        pidWheelCommands.rearRight = rearRightCommand;
+    } else {
+        resetPidStallRecovery();
     }
 }
 
