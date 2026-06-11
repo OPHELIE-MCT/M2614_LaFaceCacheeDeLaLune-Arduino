@@ -134,6 +134,10 @@ bool inPidForwardMode = false;
 // Tracks the previous AUTO_STATE to detect state entries (used to reset PIDs).
 AutoControlState prevAutoState = AutoControlState::SLOW_FORWARD;
 
+// Sorter latch: set on RC F falling edge while in MANUAL_CONTROL, reset outside manual.
+bool isBallSorterEnabled = false;
+bool previousSorterButtonPressed = false;
+
 int16_t applyDeadzone(int16_t value, int16_t deadzone) {
     return (value > -deadzone && value < deadzone) ? 0 : value;
 }
@@ -246,7 +250,7 @@ void updateConnectionState(uint32_t nowMs) {
     const bool hasDriveSignal = rc.isSignalValid(RCChannel::A) && rc.isSignalValid(RCChannel::B) && rc.isSignalValid(RCChannel::D);
     if (hasDriveSignal) {
         driveSignalInvalidSinceMs = 0;
-        if (CURRENT_STATE == ControlState::CONNECTION_LOST) {
+        if (!hasSignal) {
             CURRENT_STATE = ControlState::MANUAL_CONTROL;
             resetTofPauseTrackingStats();
             Monitor.println("=============== RC SIGNAL RESTORED ===============");
@@ -257,9 +261,8 @@ void updateConnectionState(uint32_t nowMs) {
             driveSignalInvalidSinceMs = nowMs;
         }
         const bool lossDebounceElapsed = (nowMs - driveSignalInvalidSinceMs) >= kRcSignalLossDebounceMs;
-        if (lossDebounceElapsed && CURRENT_STATE != ControlState::CONNECTION_LOST && hasSignal) {
-            // CURRENT_STATE = ControlState::CONNECTION_LOST;
-            // CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
+        if (lossDebounceElapsed && hasSignal) {
+            CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
             Monitor.println("=============== RC SIGNAL LOST ===============");
             hasSignal = false;
         }
@@ -276,7 +279,9 @@ DriveCommands handleManualControl() {
     static bool wasAutoSwitchPressed = false;
     static uint32_t lastAutoSwitchLogMs = 0;
     const bool hasAutoSwitchSignal = rc.isSignalValid(RCChannel::E) && rc.isSignalValid(RCChannel::F);
-    const bool isAutoSwitchPressed = hasAutoSwitchSignal && rc.getButton(RCChannel::E, kButtonPressThresholdUs) && rc.getButton(RCChannel::F, kButtonPressThresholdUs);
+    const bool isAutoSwitchPressed = hasAutoSwitchSignal && rc.getButton(RCChannel::E) && rc.getButton(RCChannel::F);
+    const bool sorterButtonPressed = rc.getButton(RCChannel::F);
+    const bool sorterButtonFallingEdge = previousSorterButtonPressed && !sorterButtonPressed;
     const uint16_t pulseE = rc.getPulseWidthUs(RCChannel::E);
     const uint16_t pulseF = rc.getPulseWidthUs(RCChannel::F);
 
@@ -287,6 +292,18 @@ DriveCommands handleManualControl() {
         Monitor.println("=============== SWITCHING TO AUTOMATIC CONTROL MODE ===============");
     }
     wasAutoSwitchPressed = isAutoSwitchPressed;
+
+    // Latch behavior in MANUAL_CONTROL:
+    // - Toggle on sorter button falling edge (release).
+    // - Reset whenever the auto switch combo is active.
+    if (isAutoSwitchPressed) {
+        isBallSorterEnabled = false;
+    } else if (sorterButtonFallingEdge) {
+        isBallSorterEnabled = !isBallSorterEnabled;
+    }
+
+    digitalWrite(ENABLE_SORTER, isBallSorterEnabled);
+    previousSorterButtonPressed = sorterButtonPressed;
     return cmd;
 }
 
@@ -356,7 +373,7 @@ DriveCommands handleAutoReposition(const SensorSnapshot& sensors, uint32_t nowMs
         repositionStartMs = 0U;
         Monitor.println("[DEBUG] Transitioning to SLOW_FORWARD_2: Completed repositioning maneuver");
     }
-    return {30, 325, -30};
+    return {50, 325, -30};
 }
 
 DriveCommands handleAutoSlowForward2(const SensorSnapshot& sensors, uint32_t nowMs) {
@@ -491,16 +508,6 @@ void updatePid() {
         pidWheelCommands.frontRight = constrain(static_cast<int16_t>(kWheelPidBaseCommand + frontRightCorrection), 0, 500);
         pidWheelCommands.rearLeft = constrain(static_cast<int16_t>(kWheelPidBaseCommand + rearLeftCorrection), 0, 500);
         pidWheelCommands.rearRight = constrain(static_cast<int16_t>(kWheelPidBaseCommand + rearRightCorrection), 0, 500);
-
-        // Monitor.println(
-        //     String("[DEBUG] PID commands: FL=") + String(pidWheelCommands.frontLeft) +
-        //     " FR=" + String(pidWheelCommands.frontRight) +
-        //     " RL=" + String(pidWheelCommands.rearLeft) +
-        //     " RR=" + String(pidWheelCommands.rearRight) +
-        //     String(" | corr FL=") + String(frontLeftCorrection) +
-        //     " FR=" + String(frontRightCorrection) +
-        //     " RL=" + String(rearLeftCorrection) +
-        //     " RR=" + String(rearRightCorrection));
     }
 }
 
@@ -524,9 +531,15 @@ void loop() {
             cmd = handleManualControl();
             break;
         case ControlState::AUTOMATIC_CONTROL:
+            isBallSorterEnabled = false;
+            previousSorterButtonPressed = rc.getButton(RCChannel::F);
+            digitalWrite(ENABLE_SORTER, LOW);
             cmd = handleAutomaticControl(sensors, nowMs);
             break;
         case ControlState::CONNECTION_LOST:
+            isBallSorterEnabled = false;
+            previousSorterButtonPressed = rc.getButton(RCChannel::F);
+            digitalWrite(ENABLE_SORTER, LOW);
             mecanumDriver.stop();
             return;
     }

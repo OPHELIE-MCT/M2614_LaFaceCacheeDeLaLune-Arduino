@@ -1,6 +1,6 @@
 #pragma once
 /* Zephyr Definitions */
-#include <SPI.h>
+// #include <SPI.h>
 
 #define I2C_SDA 20
 #define I2C_SCL 21
@@ -80,6 +80,9 @@ constexpr uint8_t RC_PIN_F = 8;
 constexpr uint8_t RC_PIN_G = 12;
 constexpr uint8_t RC_PIN_H = 12;
 
+// Communication
+constexpr uint8_t ENABLE_SORTER = JSPI_MOSI;
+
 // Initialization of sketch pins
 inline void pinSetup() {
     pinMode(FL_EN, OUTPUT);
@@ -94,6 +97,7 @@ inline void pinSetup() {
     pinMode(FR_EN, OUTPUT);
     pinMode(FR_IN1, OUTPUT);
     pinMode(FR_IN2, OUTPUT);
+    pinMode(ENABLE_SORTER, OUTPUT);
 
     // Encoder pins
     pinMode(FL_ENC_A, INPUT);
