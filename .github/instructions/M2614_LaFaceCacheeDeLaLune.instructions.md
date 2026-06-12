@@ -13,13 +13,11 @@ Keep only critical facts here. Read the linked documents only when they are rele
 - This repository is the integration project for M2614 "La face cachee de la lune". The local code is still mostly a skeleton. Validated behavior currently lives in prototype folders outside this directory.
 - Define `PROTO_ROOT = C:\Users\david\OneDrive - Education Vaud\M2614 La face cachée de la lune\10_Informatique\Code` and use it as the base path for prototype references in this file. If `PROTO_ROOT` is not accessible, stop and ask the user to provide the correct root path before continuing.
 - The robot is split across three execution domains:
-  - Uno Q MCU: real-time control, global state machine, RC input, wheel encoders, wall switches, LiDAR, SPI link
-  - Uno Q Linux SBC: Python services, RouterBridge RPC, dashboard, visualization, logging, heavy computation
-  - Seeeduino Nano: ball sorter hardware, local sorter sensors, NeoPixel status display, emergency-stop reporting
-- Keep the Uno Q as the SPI slave. This is a hard project constraint due to the current fragility of the Uno Q SPI stack.
+  - Uno Q MCU: real-time control, global state machine, RC input, wheel encoders, wall switches, LiDAR, sorter-enable digital output
+  - Uno Q Linux SBC: Python services, RouterBridge RPC, dashboard, visualization, logging, color calibration, centroid analysis, heavy computation
+  - Seeeduino Nano: ball sorter hardware, local sorter sensors, AS7341 color classifier, NeoPixel status display
 - On Uno Q RouterBridge code, do not use `Serial.println(...)`. Use `Monitor.println(...)`, and call `Monitor.begin()` without a baud rate.
-- Treat the Uno Q as a beta Arduino Zephyr target with a custom core installed at `C:\Users\david\AppData\Local\Arduino15\packages\arduino\hardware\zephyr\0.55.0\`.
-- If for any reasons you need to edit the source code of the Uno Q core firmware, verify that the core path `C:\Users\david\AppData\Local\Arduino15\packages\arduino\hardware\zephyr\0.55.0\` is referenced in the workspace before editing. If it cannot be confirmed, warn the user that core path availability is unverified and that the change is theoretical until the core is confirmed installed. Document the change and its rationale in the Markdown docs in this repository. Also notify the user that a new core firmware will need to be rebuilt and installed locally before the change can be tested. The user still need to compile this manually under WSL/Ubuntu, as the Uno Q development is Linux-first and may fail under Windows for reasons unrelated to the code change.
+- The Uno Q runs the standard Arduino Zephyr core (no custom firmware modifications needed).
 - Keep heavy, non-real-time work on the SBC side unless the task explicitly requires real-time execution on the MCU.
 - Please note that communication between the Uno Q MCU and SBC done via RouterBridge is slow and has non-negligible latency. It is not suitable for high-frequency control loops or real-time sensor processing. Use it primarily for commands, configuration, and low-frequency telemetry as it can occasionally hang the MCU temporarily.
 - If a requested feature would require crossing the RouterBridge at a frequency or latency that conflicts with the constraint above, do not implement it as described. Instead, flag the architectural conflict to the user, explain the latency constraint, and propose an alternative design that keeps high-frequency logic on the MCU side before writing any code.
@@ -57,8 +55,8 @@ Keep only critical facts here. Read the linked documents only when they are rele
   use `${PROTO_ROOT}\Tests\RC_Reciever\` and `${PROTO_ROOT}\Tests\MechanumTest\`.
 - LiDAR integration task:
   use `${PROTO_ROOT}\Tests\LiDAR\`.
-- SPI integration between Uno Q and Seeeduino:
-  use `${PROTO_ROOT}\Tests\SPI\` and preserve the Uno Q slave assumption.
+- Sorter control command (RC channel F):
+  The Uno Q drives a simple GPIO output (`ENABLE_SORTER`) based on RC channel F falling edge in manual mode. Refer to `M2614_LaFaceCacheeDeLaLune.ino` and `PINS.h` for the current latch behavior.
 - Ball sorting or sorter calibration task:
   use `${PROTO_ROOT}\ball-sorter\` and `C:\Users\david\Documents\dev\ball-analysis\`.
 
