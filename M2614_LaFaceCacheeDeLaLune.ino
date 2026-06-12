@@ -146,6 +146,7 @@ AutoControlState prevAutoState = AutoControlState::SLOW_FORWARD;
 // Sorter latch: set on RC F falling edge while in MANUAL_CONTROL, reset outside manual.
 bool isBallSorterEnabled = false;
 bool previousSorterButtonPressed = false;
+bool previousAutoSwitchPressed = false;
 
 void resetPidStallRecovery() {
     for (uint8_t i = 0; i < 4; ++i) {
@@ -299,6 +300,7 @@ void updateConnectionState(uint32_t nowMs) {
         if (!hasSignal) {
             CURRENT_STATE = ControlState::MANUAL_CONTROL;
             resetTofPauseTrackingStats();
+            previousAutoSwitchPressed = false;
             Monitor.println("=============== RC SIGNAL RESTORED ===============");
             hasSignal = true;
         }
@@ -309,6 +311,8 @@ void updateConnectionState(uint32_t nowMs) {
         const bool lossDebounceElapsed = (nowMs - driveSignalInvalidSinceMs) >= kRcSignalLossDebounceMs;
         if (lossDebounceElapsed && hasSignal) {
             CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
+            AUTO_STATE = AutoControlState::SLOW_FORWARD;
+            configureTofPauseSegment(3U, "SLOW_FORWARD", AutoControlState::SLOW_FORWARD);
             Monitor.println("=============== RC SIGNAL LOST ===============");
             hasSignal = false;
         }
@@ -322,7 +326,6 @@ DriveCommands handleManualControl() {
     cmd.lateral = applyDeadzone(rc.getJoystick(RCChannel::B), kJoystickDeadzone);
     cmd.rotation = applyDeadzone(rc.getJoystick(RCChannel::D), kJoystickDeadzone);
 
-    static bool wasAutoSwitchPressed = false;
     static uint32_t lastAutoSwitchLogMs = 0;
     const bool hasAutoSwitchSignal = rc.isSignalValid(RCChannel::E) && rc.isSignalValid(RCChannel::F);
     const bool isAutoSwitchPressed = hasAutoSwitchSignal && rc.getButton(RCChannel::E) && rc.getButton(RCChannel::F);
@@ -331,13 +334,13 @@ DriveCommands handleManualControl() {
     const uint16_t pulseE = rc.getPulseWidthUs(RCChannel::E);
     const uint16_t pulseF = rc.getPulseWidthUs(RCChannel::F);
 
-    if (isAutoSwitchPressed && !wasAutoSwitchPressed) {
+    if (isAutoSwitchPressed && !previousAutoSwitchPressed) {
         CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
         AUTO_STATE = AutoControlState::SLOW_FORWARD;
         configureTofPauseSegment(3U, "SLOW_FORWARD", AutoControlState::SLOW_FORWARD);
         Monitor.println("=============== SWITCHING TO AUTOMATIC CONTROL MODE ===============");
     }
-    wasAutoSwitchPressed = isAutoSwitchPressed;
+    previousAutoSwitchPressed = isAutoSwitchPressed;
 
     // Latch behavior in MANUAL_CONTROL:
     // - Toggle on sorter button falling edge (release).
@@ -477,7 +480,9 @@ DriveCommands handleAutoStop() {
     clearTofPauseTracking();
     mecanumDriver.stop();
     CURRENT_STATE = ControlState::MANUAL_CONTROL;
+    AUTO_STATE = AutoControlState::SLOW_FORWARD;
     resetTofPauseTrackingStats();
+    previousAutoSwitchPressed = false;
     Monitor.println("=============== SWITCHING TO MANUAL CONTROL MODE ===============");
     return {0, 0, 0};
 }
@@ -594,12 +599,14 @@ void loop() {
         case ControlState::AUTOMATIC_CONTROL:
             isBallSorterEnabled = false;
             previousSorterButtonPressed = rc.getButton(RCChannel::F);
+            previousAutoSwitchPressed = false;
             digitalWrite(ENABLE_SORTER, LOW);
             cmd = handleAutomaticControl(sensors, nowMs);
             break;
         case ControlState::CONNECTION_LOST:
             isBallSorterEnabled = false;
             previousSorterButtonPressed = rc.getButton(RCChannel::F);
+            previousAutoSwitchPressed = false;
             digitalWrite(ENABLE_SORTER, LOW);
             mecanumDriver.stop();
             return;
