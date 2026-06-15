@@ -82,7 +82,6 @@ class RemoteController {
      * @brief Construct the controller from RC receiver pin mapping.
      * @param pins GPIO configuration for channels A..H.
      * @return None.
-     * @example
      * // RCReceiverPins pins{9,8,7,6,5,4,3,2};
      * // RemoteController rc(pins);
      * @author GOLETTA David
@@ -94,7 +93,6 @@ class RemoteController {
      * @brief Configure all RC channel pins as input and reset state.
      * @param none No parameters.
      * @return None.
-     * @example
      * // rc.begin();
      * @author GOLETTA David
      * @date 2026-05-18
@@ -105,7 +103,6 @@ class RemoteController {
      * @brief Poll all channels and refresh pulse width measurements.
      * @param none No parameters.
      * @return None.
-     * @example
      * // rc.update();
      * @author GOLETTA David
      * @date 2026-05-18
@@ -116,7 +113,6 @@ class RemoteController {
      * @brief Read the last pulse width of a channel.
      * @param channel Channel identifier A..H.
      * @return Pulse width in microseconds. Returns 0 when signal is invalid.
-     * @example
      * // uint16_t aUs = rc.getPulseWidthUs(RCChannel::A);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -127,7 +123,6 @@ class RemoteController {
      * @brief Read a joystick component mapped to [-500, +500].
      * @param channel One of A, B, C, or D.
      * @return Joystick component in [-500, +500], or 0 for invalid channel/signal.
-     * @example
      * // int16_t x = rc.getJoystick(RCChannel::A);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -139,7 +134,6 @@ class RemoteController {
      * @param channel One of E or F.
      * @param thresholdUs Press threshold in microseconds. Defaults to 1746.
      * @return True when pulse width is greater than or equal to threshold.
-     * @example
      * // bool pressed = rc.getButton(RCChannel::E);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -154,7 +148,6 @@ class RemoteController {
      *
      * @param channel One of G or H.
      * @return Quantized trim value (0, 500, or 1000), or 0 for invalid channel/signal.
-     * @example
      * // uint16_t value = rc.getTrimValue(RCChannel::G);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -165,7 +158,6 @@ class RemoteController {
      * @brief Read a digital trim control as a signed step.
      * @param channel One of G or H.
      * @return -1 (low), 0 (center), +1 (high), or 0 if invalid channel/signal.
-     * @example
      * // int8_t trim = rc.getTrimStep(RCChannel::H);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -176,7 +168,6 @@ class RemoteController {
      * @brief Check whether the latest sample of a channel is valid.
      * @param channel Channel identifier A..H.
      * @return True if a valid pulse was recently measured, otherwise false.
-     * @example
      * // bool ok = rc.isSignalValid(RCChannel::C);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -235,7 +226,6 @@ class RemoteController {
      * @brief Convert channel enum to index.
      * @param channel Channel identifier A..H.
      * @return Zero-based array index in [0, 7].
-     * @example
      * // uint8_t i = toIndex(RCChannel::D);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -265,7 +255,6 @@ class RemoteController {
      * @brief Check whether a channel is a joystick component.
      * @param channel Channel identifier A..H.
      * @return True for A-D, otherwise false.
-     * @example
      * // bool isJoy = isJoystickChannel(RCChannel::B);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -276,7 +265,6 @@ class RemoteController {
      * @brief Check whether a channel is a button.
      * @param channel Channel identifier A..H.
      * @return True for E-F, otherwise false.
-     * @example
      * // bool isBtn = isButtonChannel(RCChannel::F);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -287,7 +275,6 @@ class RemoteController {
      * @brief Check whether a channel is a trim channel.
      * @param channel Channel identifier A..H.
      * @return True for G-H, otherwise false.
-     * @example
      * // bool isTrim = isTrimChannel(RCChannel::G);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -299,7 +286,6 @@ class RemoteController {
      * @param state Mutable state for one channel.
      * @param nowUs Current timestamp from micros().
      * @return None.
-     * @example
      * // updateChannel(channels_[0], micros());
      * @author GOLETTA David
      * @date 2026-05-18
@@ -385,7 +371,6 @@ class RemoteController {
      * @brief Clamp a pulse width to receiver limits.
      * @param pulseUs Pulse width in microseconds.
      * @return Clamped pulse width in [1000, 2000].
-     * @example
      * // uint16_t p = clampPulse(2100);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -396,7 +381,6 @@ class RemoteController {
      * @brief Map pulse width to signed joystick range.
      * @param pulseUs Pulse width in microseconds.
      * @return Mapped value in [-500, +500].
-     * @example
      * // int16_t joy = mapToJoystick(1500);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -407,7 +391,6 @@ class RemoteController {
      * @brief Map pulse width to trim value range.
      * @param pulseUs Pulse width in microseconds.
      * @return Quantized value in {0, 500, 1000}.
-     * @example
      * // uint16_t value = mapToTrimValue(1500);
      * @author GOLETTA David
      * @date 2026-05-18
@@ -418,7 +401,6 @@ class RemoteController {
      * @brief Map pulse width to digital trim step.
      * @param pulseUs Pulse width in microseconds.
      * @return -1 for low, 0 for center, +1 for high.
-     * @example
      * // int8_t s = mapToTrimStep(1496);
      * @author GOLETTA David
      * @date 2026-05-18
