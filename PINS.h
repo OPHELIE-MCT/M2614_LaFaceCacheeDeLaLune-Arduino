@@ -81,7 +81,7 @@ constexpr uint8_t RC_PIN_G = 12;
 constexpr uint8_t RC_PIN_H = 12;
 
 // Communication
-constexpr uint8_t ENABLE_SORTER = JSPI_MOSI;
+constexpr uint8_t ENABLE_SORTER = 13;
 
 // Initialization of sketch pins
 inline void pinSetup() {
