@@ -10,6 +10,10 @@
 #include "driver/SpeedController.h"
 #include "driver/ToFDistanceSensor.h"
 
+// Set this to false to disable the automatic control fallback when RC signal is lost.
+// This is useful to use the robot in another circuit without triggering the autonomous behavior
+constexpr bool IS_AUTONOMOUS_MODE_ENABLED = true;
+
 MotorPinConfig frontLeftPins = {FL_IN1, FL_IN2, FL_EN};
 MotorPinConfig frontRightPins = {FR_IN1, FR_IN2, FR_EN};
 MotorPinConfig rearLeftPins = {BL_IN1, BL_IN2, BL_EN};
@@ -323,7 +327,7 @@ void updateConnectionState(uint32_t nowMs) {
         }
         const bool lossDebounceElapsed = (nowMs - driveSignalInvalidSinceMs) >= kRcSignalLossDebounceMs;
         if (lossDebounceElapsed && hasSignal) {
-            CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
+            CURRENT_STATE = IS_AUTONOMOUS_MODE_ENABLED ? ControlState::AUTOMATIC_CONTROL : ControlState::CONNECTION_LOST;
             AUTO_STATE = AutoControlState::SLOW_FORWARD;
             configureTofPauseSegment(3U, "SLOW_FORWARD", AutoControlState::SLOW_FORWARD);
             Monitor.println("=============== RC SIGNAL LOST ===============");
