@@ -1,6 +1,7 @@
 // Necessary file for Arduino build system to recognize these source files as part of the compilation process.
 #include "LiDAR/LDS_LDROBOT_LD19.cpp"
 #include "LiDAR/LiDARSensor.cpp"
+#include "calibration/ColorCalibration.cpp"
 #include "debug/debug_print.cpp"
 #include "debug/test_sequences.cpp"
 #include "driver/FeedbackEncoder.cpp"

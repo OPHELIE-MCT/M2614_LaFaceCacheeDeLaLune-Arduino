@@ -90,7 +90,7 @@ class LiDARSensor {
 
     /**
      * @brief Query the last committed scan and return detailed match metadata.
-     * @description The query searches valid points around the requested angle
+     * @details The query searches valid points around the requested angle
      * within a bounded window to avoid long-range fallback across unrelated
      * sectors when a local hole exists.
      * @param angleInDegrees Requested heading in whole degrees.
@@ -175,7 +175,7 @@ class LiDARSensor {
 
     /**
      * @brief Finalize the current write scan and rotate buffers when valid.
-     * @description The write buffer is committed only when quality thresholds
+     * @details The write buffer is committed only when quality thresholds
      * are met. Commit is O(1) via index swap. The next write buffer is always
      * reset after finalization.
      * @author GOLETTA David

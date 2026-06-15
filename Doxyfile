@@ -1,0 +1,20 @@
+PROJECT_NAME           = "M2614 La face cachée de la lune"
+OUTPUT_DIRECTORY       = docs
+GENERATE_HTML          = YES
+GENERATE_LATEX         = YES
+USE_PDFLATEX           = YES
+USE_HYPERLINKS         = YES
+INPUT                  = "C:\Users\david\OneDrive - Education Vaud\M2614 La face cachée de la lune\10_Informatique\Code\M2614_LaFaceCacheeDeLaLune"
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.hpp *.c *.cpp *.ino *.md
+MARKDOWN_SUPPORT       = YES
+EXTENSION_MAPPING      = ino=C++
+EXCLUDE                = README-fr.md
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+QUIET                  = NO
+WARNINGS               = YES
+USE_MDFILE_AS_MAINPAGE = README.md
+HIDE_UNDOC_MEMBERS     = YES
+HIDE_UNDOC_CLASSES     = YES
