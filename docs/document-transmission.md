@@ -15,11 +15,11 @@ Pour les détails de maintenance ou de développement, se référer ensuite aux 
 
 ---
 
-## 1. Vue d'ensemble du robot
+## Vue d'ensemble du robot
 
 Le robot est composé de trois sous-systèmes principaux.
 
-### 1.1 Arduino Uno Q - partie microcontrôleur
+### Arduino Uno Q - partie microcontrôleur
 
 La partie microcontrôleur de l'Arduino Uno Q exécute le firmware principal du robot. Elle gère les éléments temps réel :
 
@@ -37,7 +37,7 @@ Le fichier principal est :
 M2614_LaFaceCacheeDeLaLune.ino
 ```
 
-### 1.2 Arduino Uno Q - partie SBC Linux
+### Arduino Uno Q - partie SBC Linux
 
 L'Arduino Uno Q contient aussi un petit ordinateur Linux embarqué. Dans ce projet, il sert surtout à exécuter le service Python de calibration couleur.
 
@@ -55,7 +55,7 @@ Le dépôt concerné est :
 M2614_LaFaceCacheeDeLaLune-Python
 ```
 
-### 1.3 Seeeduino Nano - trieur de balles
+### Seeeduino Nano - trieur de balles
 
 Le trieur est un sous-système séparé. Il est piloté par une carte Seeeduino Nano et fonctionne de manière autonome une fois activé.
 
@@ -76,9 +76,9 @@ ball-sorter
 
 ---
 
-## 2. Principe général de fonctionnement
+## Principe général de fonctionnement
 
-### 2.1 Pourquoi le projet n'utilise pas Arduino App Lab comme solution principale
+### Pourquoi le projet n'utilise pas Arduino App Lab comme solution principale
 
 L'Arduino Uno Q est conçue pour fonctionner avec **Arduino App Lab**, qui permet de lancer des applications directement sur la partie Linux de la carte. Cependant, App Lab repose sur un modèle orienté applications et conteneurs.
 
@@ -97,7 +97,7 @@ Le développement retenu est donc plus traditionnel :
 - service lancé via **systemd** ;
 - pas d'application Docker App Lab pour la partie exploitation.
 
-### 2.2 Répartition des tâches
+### Répartition des tâches
 
 Les règles de conception à conserver sont les suivantes :
 
@@ -108,9 +108,9 @@ Les règles de conception à conserver sont les suivantes :
 
 ---
 
-## 3. Mise en route rapide du robot
+## Mise en route rapide du robot
 
-### 3.1 Avant d'allumer
+### Avant d'allumer
 
 Avant une utilisation normale, vérifier que :
 
@@ -121,7 +121,7 @@ Avant une utilisation normale, vérifier que :
 5. le capteur AS7341 de calibration n'est pas branché au démarrage, sauf si l'objectif est de recalibrer les couleurs ;
 6. la zone autour du robot est dégagée.
 
-### 3.2 Démarrage normal
+### Démarrage normal
 
 1. Allumer la télécommande RC.
 2. Alimenter le robot.
@@ -131,7 +131,7 @@ Avant une utilisation normale, vérifier que :
 
 Si le capteur AS7341 de calibration est branché pendant le démarrage, le robot peut entrer en mode calibration au lieu du mode de conduite normal.
 
-### 3.3 Modes de conduite
+### Modes de conduite
 
 Le robot possède trois états principaux :
 
@@ -145,7 +145,7 @@ Le passage en mode automatique se fait par la combinaison **E + F**.
 
 ---
 
-## 4. Activer ou désactiver le mode autonome
+## Activer ou désactiver le mode autonome
 
 Le client peut facilement désactiver le comportement autonome si le robot doit être utilisé dans un autre contexte ou sur un autre circuit.
 
@@ -161,7 +161,7 @@ modifier la variable située à la **ligne 15** :
 constexpr bool IS_AUTONOMOUS_MODE_ENABLED = true;
 ```
 
-### 4.1 Mode autonome activé
+### Mode autonome activé
 
 ```cpp
 constexpr bool IS_AUTONOMOUS_MODE_ENABLED = true;
@@ -169,7 +169,7 @@ constexpr bool IS_AUTONOMOUS_MODE_ENABLED = true;
 
 Avec cette valeur, si le signal RC de conduite est perdu pendant suffisamment longtemps, le robot peut passer en contrôle automatique selon la logique prévue dans le firmware.
 
-### 4.2 Mode autonome désactivé
+### Mode autonome désactivé
 
 ```cpp
 constexpr bool IS_AUTONOMOUS_MODE_ENABLED = false;
@@ -181,7 +181,7 @@ Après modification, il faut recompiler et téléverser le firmware sur l'Arduin
 
 ---
 
-## 5. Connexion réseau de l'Arduino Uno Q
+## Connexion réseau de l'Arduino Uno Q
 
 L'Arduino Uno Q est actuellement configurée pour un partage de connexion spécifique. Si le réseau change, il faut reconnecter la carte au nouveau WiFi.
 
@@ -192,7 +192,7 @@ La carte doit être branchée à un ordinateur en USB-C. Deux méthodes sont pos
 
 Dans les deux cas, la configuration WiFi se fait ensuite avec la commande Linux `nmcli` sur l'Arduino Uno Q.
 
-### 5.1 Important : WiFi de l'école
+### Important : WiFi de l'école
 
 Le WiFi de l'école ne doit pas être considéré comme utilisable pour cette carte dans ce projet.
 
@@ -210,7 +210,7 @@ Il est préférable d'utiliser :
 
 ---
 
-## 6. Méthode A - Connexion avec ADB installé sur le PC
+## Méthode A - Connexion avec ADB installé sur le PC
 
 Cette section est une adaptation en français du tutoriel officiel Arduino **Connect to UNO Q via ADB** :
 
@@ -220,13 +220,13 @@ https://docs.arduino.cc/tutorials/uno-q/adb/
 
 La documentation Arduino est publiée sous licence Creative Commons Attribution-ShareAlike 4.0. Les étapes ci-dessous reprennent le contenu utile pour ce projet sous forme traduite et adaptée.
 
-### 6.1 Matériel nécessaire
+### Matériel nécessaire
 
 - Arduino Uno Q ;
 - câble USB-C capable de transférer des données ;
 - ordinateur Windows, macOS ou Linux.
 
-### 6.2 Installer ADB sur l'ordinateur
+### Installer ADB sur l'ordinateur
 
 ADB signifie **Android Debug Bridge**. C'est l'outil qui permet d'ouvrir un shell sur la partie Linux de l'Arduino Uno Q via USB.
 
@@ -273,7 +273,7 @@ Vérifier :
 adb version
 ```
 
-### 6.3 Se connecter à l'Arduino Uno Q avec ADB
+### Se connecter à l'Arduino Uno Q avec ADB
 
 1. Brancher l'Arduino Uno Q au PC avec le câble USB-C.
 2. Attendre jusqu'à une minute que la carte soit détectée.
@@ -309,11 +309,11 @@ exit
 
 ---
 
-## 7. Méthode B - Connexion avec Arduino App Lab
+## Méthode B - Connexion avec Arduino App Lab
 
 Arduino App Lab peut être utilisé uniquement comme outil d'accès à la carte, même si le projet ne s'appuie pas sur App Lab pour l'exploitation permanente.
 
-### 7.1 Connexion avec l'interface App Lab
+### Connexion avec l'interface App Lab
 
 1. Lancer Arduino App Lab sur l'ordinateur.
 2. Brancher l'Arduino Uno Q en USB-C.
@@ -321,7 +321,7 @@ Arduino App Lab peut être utilisé uniquement comme outil d'accès à la carte,
 4. Selon l'état de la carte, App Lab peut proposer directement une configuration WiFi.
 5. Suivre l'assistant si la configuration WiFi graphique est proposée.
 
-### 7.2 Connexion avec le terminal intégré App Lab
+### Connexion avec le terminal intégré App Lab
 
 Si App Lab ne propose pas directement la configuration WiFi, il est possible d'utiliser son accès shell.
 
@@ -335,7 +335,7 @@ Ce shell utilise une technologie ADB intégrée à Arduino App Lab. Les commande
 
 ---
 
-## 8. Configurer le WiFi avec nmcli
+## Configurer le WiFi avec nmcli
 
 `nmcli` est l'outil en ligne de commande de NetworkManager. Il permet de lister les réseaux, se connecter à un WiFi, vérifier l'adresse IP et supprimer une ancienne configuration.
 
@@ -343,7 +343,7 @@ Les commandes ci-dessous doivent être exécutées **dans le shell de l'Arduino 
 
 ![Capture d'écran de nmcli dans le terminal de l'Arduino Uno Q](images/nmcli.png)
 
-### 8.1 Vérifier les interfaces réseau
+### Vérifier les interfaces réseau
 
 ```bash
 nmcli device status
@@ -351,7 +351,7 @@ nmcli device status
 
 Repérer l'interface WiFi. Elle est généralement nommée `wlan0`, mais le nom exact peut varier.
 
-### 8.2 Lister les réseaux disponibles
+### Lister les réseaux disponibles
 
 ```bash
 nmcli device wifi list
@@ -364,7 +364,7 @@ nmcli device wifi rescan
 nmcli device wifi list
 ```
 
-### 8.3 Se connecter à un réseau WiFi simple
+### Se connecter à un réseau WiFi simple
 
 Remplacer `NOM_DU_WIFI` et `MOT_DE_PASSE_WIFI` par les valeurs réelles :
 
@@ -378,13 +378,13 @@ Exemple :
 sudo nmcli device wifi connect "MonPartage" password "motdepasse123"
 ```
 
-### 8.4 Se connecter à un réseau caché
+### Se connecter à un réseau caché
 
 ```bash
 sudo nmcli device wifi connect "NOM_DU_WIFI" password "MOT_DE_PASSE_WIFI" hidden yes
 ```
 
-### 8.5 Vérifier la connexion
+### Vérifier la connexion
 
 ```bash
 nmcli connection show --active
@@ -399,7 +399,7 @@ hostname -I
 
 Noter cette adresse IP : elle servira pour SSH, l'interface web ou le téléversement réseau.
 
-### 8.6 Oublier une ancienne connexion WiFi
+### Oublier une ancienne connexion WiFi
 
 Lister les connexions enregistrées :
 
@@ -413,7 +413,7 @@ Supprimer une connexion inutile :
 sudo nmcli connection delete "NOM_DE_LA_CONNEXION"
 ```
 
-### 8.7 Redémarrer le réseau en cas de problème
+### Redémarrer le réseau en cas de problème
 
 ```bash
 sudo systemctl restart NetworkManager
@@ -428,7 +428,7 @@ nmcli connection show --active
 
 ---
 
-## 9. Accès SSH à l'Arduino Uno Q
+## Accès SSH à l'Arduino Uno Q
 
 Une fois l'Arduino Uno Q connectée au WiFi, il est possible de s'y connecter en SSH.
 
@@ -457,7 +457,7 @@ Le mot de passe demandé est :
 M2614
 ```
 
-### 9.1 Utiliser une clé SSH
+### Utiliser une clé SSH
 
 L'Arduino Uno Q supporte l'authentification par clé SSH. C'est recommandé pour éviter de retaper le mot de passe.
 
@@ -530,13 +530,13 @@ La connexion doit fonctionner sans demander le mot de passe, ou uniquement deman
 
 ---
 
-## 10. Interface graphique Linux de l'Uno Q
+## Interface graphique Linux de l'Uno Q
 
 Pour économiser les ressources, l'interface graphique de la partie Linux a été désactivée. La carte est utilisée en permanence en mode **headless**, c'est-à-dire sans écran local.
 
 Cela évite au serveur graphique de consommer inutilement du CPU et de la RAM.
 
-### 10.1 Réactiver temporairement l'interface graphique
+### Réactiver temporairement l'interface graphique
 
 Cette commande démarre la cible graphique pour la session courante, sans changer le démarrage par défaut :
 
@@ -550,7 +550,7 @@ Selon l'image système installée, il peut aussi être utile de démarrer le ges
 sudo systemctl start display-manager
 ```
 
-### 10.2 Réactiver l'interface graphique au démarrage
+### Réactiver l'interface graphique au démarrage
 
 Pour démarrer automatiquement sur l'interface graphique à chaque boot :
 
@@ -559,7 +559,7 @@ sudo systemctl set-default graphical.target
 sudo reboot
 ```
 
-### 10.3 Revenir au mode headless / TTY
+### Revenir au mode headless / TTY
 
 Pour revenir au comportement optimisé du projet :
 
@@ -576,7 +576,7 @@ sudo systemctl isolate multi-user.target
 
 ---
 
-## 11. Service Python de calibration sur le SBC
+## Service Python de calibration sur le SBC
 
 Le service Python s'exécute directement sur le Linux embarqué, sans conteneur Docker App Lab.
 
@@ -589,25 +589,25 @@ Commande   : /home/arduino/.local/bin/uv run main.py
 Service    : M2614.service
 ```
 
-### 11.1 Vérifier l'état du service
+### Vérifier l'état du service
 
 ```bash
 systemctl status M2614.service
 ```
 
-### 11.2 Redémarrer le service
+### Redémarrer le service
 
 ```bash
 sudo systemctl restart M2614.service
 ```
 
-### 11.3 Voir les logs
+### Voir les logs
 
 ```bash
 journalctl -u M2614.service -f
 ```
 
-### 11.4 Accéder à l'interface web
+### Accéder à l'interface web
 
 Depuis un ordinateur sur le même réseau :
 
@@ -626,11 +626,11 @@ L'interface permet notamment :
 
 ---
 
-## 12. Calibration couleur
+## Calibration couleur
 
 La calibration couleur sert à mettre à jour les constantes utilisées par le trieur de balles.
 
-### 12.1 Quand recalibrer
+### Quand recalibrer
 
 Recalibrer si :
 
@@ -640,7 +640,7 @@ Recalibrer si :
 - le tri devient instable ;
 - les couleurs détectées ne correspondent plus aux balles réelles.
 
-### 12.2 Procédure générale
+### Procédure générale
 
 1. Brancher le capteur AS7341 de calibration sur l'Arduino Uno Q.
 2. Redémarrer l'Uno Q pour que le firmware détecte le capteur au boot.
@@ -656,17 +656,17 @@ Recalibrer si :
 12. Recompiler et téléverser le firmware `ball-sorter` sur la Seeeduino Nano.
 13. Tester le tri avec un jeu de balles réel.
 
-### 12.3 Rôle du notebook ball-analyzer
+### Rôle du notebook ball-analyzer
 
 Le dépôt `ball-analyzer` reste disponible comme outil de secours ou d'analyse hors ligne. Le workflow nominal recommandé est toutefois l'interface web du service Python sur l'Uno Q.
 
 ---
 
-## 13. Trieur de balles
+## Trieur de balles
 
 Le trieur fonctionne localement sur la Seeeduino Nano. Le firmware principal du robot ne lui envoie pas de commandes complexes : il active ou désactive seulement le trieur via une broche dédiée.
 
-### 13.1 Comportement attendu
+### Comportement attendu
 
 1. Une balle arrive dans le mécanisme.
 2. Un capteur ToF détecte sa présence.
@@ -676,7 +676,7 @@ Le trieur fonctionne localement sur la Seeeduino Nano. Le firmware principal du 
 6. Le servo oriente la balle vers la sortie adaptée.
 7. Les NeoPixels affichent la couleur détectée et un niveau de confiance.
 
-### 13.2 Retours visuels
+### Retours visuels
 
 - couleur affichée : couleur prédite ;
 - plus de pixels allumés : confiance plus élevée ;
@@ -685,9 +685,9 @@ Le trieur fonctionne localement sur la Seeeduino Nano. Le firmware principal du 
 
 ---
 
-## 14. Compilation et téléversement
+## Compilation et téléversement
 
-### 14.1 Firmware principal Uno Q
+### Firmware principal Uno Q
 
 Carte cible :
 
@@ -709,7 +709,7 @@ arduino-cli upload -p COM9 -b arduino:zephyr:unoq --input-dir .build
 
 `COM9` est un exemple issu de la configuration de développement. Le port réel peut changer.
 
-### 14.2 Firmware du trieur
+### Firmware du trieur
 
 Carte cible :
 
@@ -733,9 +733,9 @@ arduino-cli upload --verbose -p COM28 -b Seeeduino:avr:nano --input-dir $env:TEM
 
 ---
 
-## 15. Dépannage rapide
+## Dépannage rapide
 
-### 15.1 Le robot ne répond pas à la télécommande
+### Le robot ne répond pas à la télécommande
 
 Vérifier :
 
@@ -745,7 +745,7 @@ Vérifier :
 - que le robot n'est pas en mode calibration ;
 - que le signal RC n'a pas été perdu.
 
-### 15.2 Le robot démarre en mode calibration
+### Le robot démarre en mode calibration
 
 Cause probable : le capteur AS7341 de calibration est détecté au démarrage.
 
@@ -755,7 +755,7 @@ Solution :
 2. débrancher le capteur de calibration si l'on veut utiliser le robot normalement ;
 3. redémarrer.
 
-### 15.3 Le mode automatique s'active alors qu'il ne devrait pas
+### Le mode automatique s'active alors qu'il ne devrait pas
 
 Vérifier la variable suivante dans `M2614_LaFaceCacheeDeLaLune.ino`, ligne 15 :
 
@@ -771,7 +771,7 @@ constexpr bool IS_AUTONOMOUS_MODE_ENABLED = false;
 
 Puis recompiler et téléverser.
 
-### 15.4 Impossible d'accéder à l'interface web
+### Impossible d'accéder à l'interface web
 
 Vérifier :
 
@@ -789,7 +789,7 @@ systemctl status M2614.service
 journalctl -u M2614.service -n 50
 ```
 
-### 15.5 Le trieur ne bouge pas
+### Le trieur ne bouge pas
 
 Vérifier :
 
@@ -799,7 +799,7 @@ Vérifier :
 - la ligne `ENABLE_SORTER` ;
 - le comportement du canal F en mode manuel.
 
-### 15.6 Les balles sont mal triées
+### Les balles sont mal triées
 
 Vérifier :
 
@@ -811,7 +811,7 @@ Vérifier :
 
 ---
 
-## 16. Résumé opérationnel
+## Résumé opérationnel
 
 Pour utiliser le robot normalement :
 
@@ -846,3 +846,39 @@ Pour recalibrer les couleurs :
 5. lancer l'analyse ;
 6. recopier les constantes dans `ball-sorter` ;
 7. recompiler et tester le trieur.
+
+---
+
+## Bilan de fin de projet
+
+### État des lieux du projet
+
+- Fonctionnel.
+- Terminé.
+- Conforme au cahier des charges.
+
+### Ce qu'il manque
+
+- Rien.
+
+### Améliorations possibles
+
+- Ajouter un mode totalement autonome.
+- Améliorer la communication bidirectionnelle entre les microcontrôleurs.
+- Remplacer les arbres moteur de diamètre 4 par du 6 ou 8.
+- Utiliser des roues de meilleure qualité.
+- Ré-usiner les deux plaques de PMMA :
+  - déplacer les trous des alimentations sur la plaque du dessous ;
+  - corriger la plaque basse du système de tri, découpée dans l'ordre inverse (trous et contours inversés).
+- Prévoir un meilleur système de guide-câbles.
+
+### Ce qui aurait dû être fait différemment
+
+- Intégrer le système de tri plus tôt dans la conception générale, pour éviter de devoir loger tardivement un sous-système volumineux sur le châssis.
+- Réaliser un châssis prototype moins spécifique au départ (commencer large, puis réduire la taille ensuite).
+
+### Trois points à conserver
+
+- La complémentarité des compétences entre les membres du binôme.
+- Les roues mecanum pour le pilotage omnidirectionnel.
+- Une conception « futureproof » et évolutive (présence de nombreux points de fixation pour des modules non prévus initialement).
