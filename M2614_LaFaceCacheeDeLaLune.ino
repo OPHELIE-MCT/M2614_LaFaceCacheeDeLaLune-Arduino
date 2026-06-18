@@ -3,6 +3,7 @@
 
 #include "LiDAR/LiDARSensor.h"
 #include "PINS.h"
+#include "calibration/ColorCalibration.h"
 #include "debug/debug_print.h"
 #include "driver/FeedbackEncoder.h"
 #include "driver/MecanumDriver.h"
@@ -10,128 +11,11 @@
 #include "driver/SpeedController.h"
 #include "driver/ToFDistanceSensor.h"
 
-namespace {
-
-constexpr uint8_t kAs7341Address = 57;
-constexpr size_t kColorRawChannelCount = 12;
-constexpr size_t kColorFeatureCount = 10;
-constexpr uint8_t kColorFeatureIndexes[kColorFeatureCount] = {0, 1, 2, 3, 6, 7, 8, 9, 10, 11};
-constexpr unsigned long kColorSampleIntervalMs = 100;
-constexpr uint16_t kColorIntegrationAtime = 100;
-constexpr uint16_t kColorIntegrationAstep = 100;
-constexpr uint16_t kColorLedCurrentMa = 5;
-
-constexpr char kStartCaptureMethod[] = "color_sensor.capture.start";
-constexpr char kStopCaptureMethod[] = "color_sensor.capture.stop";
-constexpr char kCaptureEnabledMethod[] = "color_sensor.capture.enabled";
-constexpr char kSensorReadyMethod[] = "color_sensor.sensor.ready";
-constexpr char kSamplesSentMethod[] = "color_sensor.capture.samples_sent";
-constexpr char kSampleMethod[] = "color_sensor.sample";
-
-Adafruit_AS7341 colorSensor;
-
-bool colorSensorReady = false;
-bool calibrationModeActive = false;
-bool captureEnabled = false;
-unsigned long lastColorSampleAtMs = 0;
-uint32_t colorSamplesSent = 0;
-
-bool initializeColorSensor() {
-    if (!colorSensor.begin(kAs7341Address, &Wire1)) {
-        return false;
-    }
-
-    colorSensor.setATIME(kColorIntegrationAtime);
-    colorSensor.setASTEP(kColorIntegrationAstep);
-    colorSensor.setGain(AS7341_GAIN_256X);
-    colorSensor.setLEDCurrent(kColorLedCurrentMa);
-    colorSensor.enableLED(true);
-    return true;
-}
-
-bool readColorFeatures(uint16_t features[kColorFeatureCount]) {
-    uint16_t rawReadings[kColorRawChannelCount];
-    if (!colorSensor.readAllChannels(rawReadings)) {
-        return false;
-    }
-
-    for (size_t index = 0; index < kColorFeatureCount; ++index) {
-        features[index] = rawReadings[kColorFeatureIndexes[index]];
-    }
-
-    return true;
-}
-
-bool startColorCapture() {
-    if (!calibrationModeActive || !colorSensorReady) {
-        Monitor.println("Capture start rejected: AS7341 is not ready.");
-        return false;
-    }
-
-    captureEnabled = true;
-    lastColorSampleAtMs = 0;
-    Monitor.println("Capture enabled.");
-    return true;
-}
-
-bool stopColorCapture() {
-    const bool wasEnabled = captureEnabled;
-    captureEnabled = false;
-    Monitor.println(wasEnabled ? "Capture disabled." : "Capture already disabled.");
-    return true;
-}
-
-bool isColorCaptureEnabled() {
-    return captureEnabled;
-}
-
-bool isColorSensorReady() {
-    return colorSensorReady;
-}
-
-uint32_t getColorSamplesSent() {
-    return colorSamplesSent;
-}
-
-void registerColorBridgeMethods() {
-    const bool startRegistered = Bridge.provide(kStartCaptureMethod, startColorCapture);
-    const bool stopRegistered = Bridge.provide(kStopCaptureMethod, stopColorCapture);
-    const bool captureRegistered = Bridge.provide(kCaptureEnabledMethod, isColorCaptureEnabled);
-    const bool readyRegistered = Bridge.provide(kSensorReadyMethod, isColorSensorReady);
-    const bool samplesRegistered = Bridge.provide(kSamplesSentMethod, getColorSamplesSent);
-
-    Monitor.println(
-        String("Bridge methods registered: start=") + (startRegistered ? "ok" : "failed") +
-        ", stop=" + (stopRegistered ? "ok" : "failed") +
-        ", enabled=" + (captureRegistered ? "ok" : "failed") +
-        ", ready=" + (readyRegistered ? "ok" : "failed") +
-        ", samples=" + (samplesRegistered ? "ok" : "failed"));
-}
-
-void maybeSendColorSample(unsigned long nowMs) {
-    if (!captureEnabled || !colorSensorReady) {
-        return;
-    }
-
-    if (lastColorSampleAtMs != 0 && (nowMs - lastColorSampleAtMs) < kColorSampleIntervalMs) {
-        return;
-    }
-
-    uint16_t features[kColorFeatureCount];
-    if (!readColorFeatures(features)) {
-        Monitor.println("AS7341 read failed.");
-        return;
-    }
-
-    lastColorSampleAtMs = nowMs;
-    ++colorSamplesSent;
-    Bridge.notify(
-        kSampleMethod,
-        features[0], features[1], features[2], features[3], features[4],
-        features[5], features[6], features[7], features[8], features[9]);
-}
-
-}  // namespace
+// Runtime flag controlling the automatic control fallback when RC signal is lost.
+// Defaults to true. Can be toggled at runtime through the RouterBridge RPC methods
+// robot.autonomous.enabled (getter) and robot.autonomous.set_enabled (setter).
+// Set this to false to disable the autonomous behavior (e.g. on another circuit).
+bool autonomousModeEnabled = true;
 
 MotorPinConfig frontLeftPins = {FL_IN1, FL_IN2, FL_EN};
 MotorPinConfig frontRightPins = {FR_IN1, FR_IN2, FR_EN};
@@ -387,17 +271,44 @@ void enterTofPauseStop(AutoControlState resumeState, uint32_t nowMs) {
         " | stop " + String(tofPauseTracker.completedStops) + "/" + String(tofPauseTracker.maxStops));
 }
 
+/**
+ * @brief RouterBridge getter for the autonomous fallback flag.
+ * @return 1 when the autonomous fallback is enabled, 0 otherwise.
+ * @author GOLETTA David
+ * @date 2026-06-18
+ */
+bool getAutonomousModeEnabled() {
+    return autonomousModeEnabled;
+}
+
+/**
+ * @brief RouterBridge setter for the autonomous fallback flag.
+ * @param enabled Non-zero to enable the autonomous fallback, 0 to disable it.
+ * @return True when the new value was applied.
+ * @author GOLETTA David
+ * @date 2026-06-18
+ */
+bool setAutonomousModeEnabled(int enabled) {
+    const bool newValue = (enabled != 0);
+    if (newValue != autonomousModeEnabled) {
+        autonomousModeEnabled = newValue;
+        Monitor.println(String("Autonomous fallback ") + (newValue ? "enabled" : "disabled") + " via RouterBridge.");
+    }
+    return true;
+}
+
 void setup() {
     Bridge.begin();
     Monitor.begin();
     Monitor.println("===============================");
     Monitor.println("Starting up...");
     pinSetup();
-    registerColorBridgeMethods();
-    colorSensorReady = initializeColorSensor();
-    calibrationModeActive = colorSensorReady;
+    ColorCalibration::registerBridgeMethods();
+    Bridge.provide("robot.autonomous.enabled", getAutonomousModeEnabled);
+    Bridge.provide("robot.autonomous.set_enabled", setAutonomousModeEnabled);
+    const bool calibrationModeActive = ColorCalibration::begin();
     Monitor.println(
-        colorSensorReady
+        ColorCalibration::isSensorReady()
             ? "AS7341 ready on Wire1. Entering calibration mode."
             : "AS7341 init failed on Wire1. Continuing normal robot setup.");
     if (calibrationModeActive) {
@@ -447,10 +358,11 @@ void updateConnectionState(uint32_t nowMs) {
         }
         const bool lossDebounceElapsed = (nowMs - driveSignalInvalidSinceMs) >= kRcSignalLossDebounceMs;
         if (lossDebounceElapsed && hasSignal) {
-            CURRENT_STATE = ControlState::AUTOMATIC_CONTROL;
+            CURRENT_STATE = autonomousModeEnabled ? ControlState::AUTOMATIC_CONTROL : ControlState::CONNECTION_LOST;
             AUTO_STATE = AutoControlState::SLOW_FORWARD;
             configureTofPauseSegment(3U, "SLOW_FORWARD", AutoControlState::SLOW_FORWARD);
             Monitor.println("=============== RC SIGNAL LOST ===============");
+            Monitor.println(autonomousModeEnabled ? "Autonomous fallback enabled." : "Autonomous fallback disabled.");
             hasSignal = false;
         }
     }
@@ -715,8 +627,8 @@ void updatePid() {
 }
 
 void loop() {
-    if (calibrationModeActive) {
-        maybeSendColorSample(millis());
+    if (ColorCalibration::isActive()) {
+        ColorCalibration::update(millis());
         return;
     }
 
