@@ -147,37 +147,32 @@ Le passage en mode automatique se fait par la combinaison **E + F**.
 
 ## Activer ou désactiver le mode autonome
 
-Le client peut facilement désactiver le comportement autonome si le robot doit être utilisé dans un autre contexte ou sur un autre circuit.
+Le comportement autonome peut être désactivé à l'exécution, sans recompilation, depuis l'interface web ou directement via RouterBridge. C'est utile quand le robot doit être utilisé dans un autre contexte ou sur un autre circuit.
 
-Dans le fichier :
+### Bascule via l'interface web
 
-```text
-M2614_LaFaceCacheeDeLaLune.ino
-```
+L'interface de calibration expose un interrupteur « Autonomous mode » dans la section « Robot control ». Le basculer appelle la route `POST /api/robot/autonomous` sur le service Python, qui relaie l'état au MCU via RouterBridge. L'état affiché est rafraîchi toutes les secondes depuis `GET /api/gather/status`.
 
-modifier la variable située à la **ligne 15** :
+### Contrat RouterBridge
 
-```cpp
-constexpr bool IS_AUTONOMOUS_MODE_ENABLED = true;
-```
+Le MCU expose deux méthodes RouterBridge pour piloter le drapeau d'autonomie à l'exécution :
 
-### Mode autonome activé
+- `robot.autonomous.enabled` (getter) : retourne `1` si la bascule autonome est active, `0` sinon.
+- `robot.autonomous.set_enabled` (setter) : prend un entier non nul pour activer, `0` pour désactiver. Retourne `true` quand la valeur est appliquée.
 
-```cpp
-constexpr bool IS_AUTONOMOUS_MODE_ENABLED = true;
-```
+Avec la bascule **activée**, si le signal RC de conduite est perdu pendant suffisamment longtemps, le robot peut passer en contrôle automatique selon la logique prévue dans le firmware.
 
-Avec cette valeur, si le signal RC de conduite est perdu pendant suffisamment longtemps, le robot peut passer en contrôle automatique selon la logique prévue dans le firmware.
+Avec la bascule **désactivée**, si le signal RC est perdu, le robot passe en état de connexion perdue et s'arrête au lieu de lancer le comportement autonome.
 
-### Mode autonome désactivé
+### Valeur par défaut au démarrage
+
+L'état par défaut au démarrage du MCU est défini dans `M2614_LaFaceCacheeDeLaLune.ino` :
 
 ```cpp
-constexpr bool IS_AUTONOMOUS_MODE_ENABLED = false;
+bool autonomousModeEnabled = true;
 ```
 
-Avec cette valeur, si le signal RC est perdu, le robot passe en état de connexion perdue et s'arrête au lieu de lancer le comportement autonome.
-
-Après modification, il faut recompiler et téléverser le firmware sur l'Arduino Uno Q.
+Pour changer la valeur par défaut, modifier cette variable puis recompiler et téléverser le firmware. La bascule runtime prévaut ensuite tant que le MCU n'est pas redémarré.
 
 ---
 
@@ -757,19 +752,15 @@ Solution :
 
 ### Le mode automatique s'active alors qu'il ne devrait pas
 
-Vérifier la variable suivante dans `M2614_LaFaceCacheeDeLaLune.ino`, ligne 15 :
+Désactiver la bascule autonome depuis l'interface web (section « Robot control »), ou appeler `robot.autonomous.set_enabled(0)` via RouterBridge.
+
+Pour changer la valeur par défaut au démarrage, modifier dans `M2614_LaFaceCacheeDeLaLune.ino` :
 
 ```cpp
-constexpr bool IS_AUTONOMOUS_MODE_ENABLED = true;
+bool autonomousModeEnabled = true;
 ```
 
-Pour désactiver le comportement autonome :
-
-```cpp
-constexpr bool IS_AUTONOMOUS_MODE_ENABLED = false;
-```
-
-Puis recompiler et téléverser.
+et mettre la valeur à `false`, puis recompiler et téléverser.
 
 ### Impossible d'accéder à l'interface web
 
@@ -832,9 +823,9 @@ Pour changer le réseau WiFi :
 
 Pour désactiver le mode autonome :
 
-1. modifier `IS_AUTONOMOUS_MODE_ENABLED` à la ligne 15 de `M2614_LaFaceCacheeDeLaLune.ino` ;
-2. mettre la valeur à `false` ;
-3. recompiler ;
+1. utiliser l'interrupteur « Autonomous mode » de l'interface web, ou appeler `POST /api/robot/autonomous` avec `{"enabled": false}` ;
+2. si le robot n'est pas connecté au service Python, appeler `robot.autonomous.set_enabled(0)` via RouterBridge ;
+3. pour un défaut au démarrage, modifier `autonomousModeEnabled` dans `M2614_LaFaceCacheeDeLaLune.ino`, mettre la valeur à `false`, puis recompiler et téléverser.
 4. téléverser sur l'Uno Q.
 
 Pour recalibrer les couleurs :

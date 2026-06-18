@@ -10,9 +10,11 @@
 #include "driver/SpeedController.h"
 #include "driver/ToFDistanceSensor.h"
 
-// Set this to false to disable the automatic control fallback when RC signal is lost.
-// This is useful to use the robot in another circuit without triggering the autonomous behavior
-constexpr bool IS_AUTONOMOUS_MODE_ENABLED = true;
+// Runtime flag controlling the automatic control fallback when RC signal is lost.
+// Defaults to true. Can be toggled at runtime through the RouterBridge RPC methods
+// robot.autonomous.enabled (getter) and robot.autonomous.set_enabled (setter).
+// Set this to false to disable the autonomous behavior (e.g. on another circuit).
+bool autonomousModeEnabled = true;
 
 MotorPinConfig frontLeftPins = {FL_IN1, FL_IN2, FL_EN};
 MotorPinConfig frontRightPins = {FR_IN1, FR_IN2, FR_EN};
@@ -268,6 +270,32 @@ void enterTofPauseStop(AutoControlState resumeState, uint32_t nowMs) {
         " | stop " + String(tofPauseTracker.completedStops) + "/" + String(tofPauseTracker.maxStops));
 }
 
+/**
+ * @brief RouterBridge getter for the autonomous fallback flag.
+ * @return 1 when the autonomous fallback is enabled, 0 otherwise.
+ * @author GOLETTA David
+ * @date 2026-06-18
+ */
+bool getAutonomousModeEnabled() {
+    return autonomousModeEnabled;
+}
+
+/**
+ * @brief RouterBridge setter for the autonomous fallback flag.
+ * @param enabled Non-zero to enable the autonomous fallback, 0 to disable it.
+ * @return True when the new value was applied.
+ * @author GOLETTA David
+ * @date 2026-06-18
+ */
+bool setAutonomousModeEnabled(int enabled) {
+    const bool newValue = (enabled != 0);
+    if (newValue != autonomousModeEnabled) {
+        autonomousModeEnabled = newValue;
+        Monitor.println(String("Autonomous fallback ") + (newValue ? "enabled" : "disabled") + " via RouterBridge.");
+    }
+    return true;
+}
+
 void setup() {
     Bridge.begin();
     Monitor.begin();
@@ -275,6 +303,8 @@ void setup() {
     Monitor.println("Starting up...");
     pinSetup();
     ColorCalibration::registerBridgeMethods();
+    Bridge.provide("robot.autonomous.enabled", getAutonomousModeEnabled);
+    Bridge.provide("robot.autonomous.set_enabled", setAutonomousModeEnabled);
     const bool calibrationModeActive = ColorCalibration::begin();
     Monitor.println(
         ColorCalibration::isSensorReady()
@@ -327,10 +357,11 @@ void updateConnectionState(uint32_t nowMs) {
         }
         const bool lossDebounceElapsed = (nowMs - driveSignalInvalidSinceMs) >= kRcSignalLossDebounceMs;
         if (lossDebounceElapsed && hasSignal) {
-            CURRENT_STATE = IS_AUTONOMOUS_MODE_ENABLED ? ControlState::AUTOMATIC_CONTROL : ControlState::CONNECTION_LOST;
+            CURRENT_STATE = autonomousModeEnabled ? ControlState::AUTOMATIC_CONTROL : ControlState::CONNECTION_LOST;
             AUTO_STATE = AutoControlState::SLOW_FORWARD;
             configureTofPauseSegment(3U, "SLOW_FORWARD", AutoControlState::SLOW_FORWARD);
             Monitor.println("=============== RC SIGNAL LOST ===============");
+            Monitor.println(autonomousModeEnabled ? "Autonomous fallback enabled." : "Autonomous fallback disabled.");
             hasSignal = false;
         }
     }
