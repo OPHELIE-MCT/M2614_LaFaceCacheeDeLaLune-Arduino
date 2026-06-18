@@ -14,6 +14,8 @@ constexpr unsigned long kColorSampleIntervalMs = 100;
 constexpr uint16_t kColorIntegrationAtime = 100;
 constexpr uint16_t kColorIntegrationAstep = 100;
 constexpr uint16_t kColorLedCurrentMa = 5;
+constexpr as7341_gain_t kColorSensorGain = AS7341_GAIN_256X;
+// constexpr as7341_gain_t kColorSensorGain = AS7341_GAIN_128X;
 
 constexpr char kStartCaptureMethod[] = "color_sensor.capture.start";
 constexpr char kStopCaptureMethod[] = "color_sensor.capture.stop";
@@ -37,7 +39,7 @@ bool initializeColorSensor() {
 
     colorSensor.setATIME(kColorIntegrationAtime);
     colorSensor.setASTEP(kColorIntegrationAstep);
-    colorSensor.setGain(AS7341_GAIN_256X);
+    colorSensor.setGain(kColorSensorGain);
     colorSensor.setLEDCurrent(kColorLedCurrentMa);
     colorSensor.enableLED(true);
     return true;
