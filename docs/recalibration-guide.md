@@ -55,14 +55,15 @@ Le fichier produit est `data/color_sensor_samples.csv`.
 Une fois le CSV complet, lancer l'analyse depuis l'interface. Le service Python :
 
 - calcule les centroïdes
-- estime le seuil inconnu
+- calcule un rayon interne global de confiance maximale au 95e percentile
+- calcule un rayon externe par classe comme la moitie de la distance au centroïde voisin le plus proche
 - génère des graphiques de contrôle
 - sauvegarde le résultat dans `data/analysis/last_centroid_analysis.json`
 - affiche le tableau C++ final à recopier
 
 ## Réinjection dans le trieur
 
-Le tableau C++ produit par l'analyse doit être reporté dans `ball-sorter/classification.cpp`. Ensuite :
+Le bloc C++ documenté produit par l'analyse doit être reporté dans `ball-sorter/classification.h`. Ensuite :
 
 1. recompiler `ball-sorter`
 2. téléverser le firmware sur la Seeeduino Nano
@@ -75,7 +76,7 @@ Après mise à jour du trieur, vérifier :
 - que chaque couleur connue est bien reconnue
 - que le comportement sur les balles rouges reste conforme
 - que le nombre de faux positifs est acceptable
-- que les valeurs de confiance semblent cohérentes avec l'affichage NeoPixel
+- que les valeurs de confiance semblent cohérentes avec la décroissance linéaire entre rayon interne et rayon externe sur l'affichage NeoPixel
 
 ## Cas d'échec fréquents
 
@@ -95,4 +96,4 @@ Après mise à jour du trieur, vérifier :
 
 - vérifier la qualité des échantillons d'origine
 - vérifier les conditions d'éclairage
-- vérifier que le bon tableau C++ a été copié dans `classification.cpp`
+- vérifier que le bon bloc de constantes a été copié dans `classification.h`

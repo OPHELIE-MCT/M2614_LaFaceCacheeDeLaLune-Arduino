@@ -651,7 +651,7 @@ Recalibrer si :
 8. Attendre environ `100` échantillons ou arrêter manuellement.
 9. Répéter pour les couleurs nécessaires.
 10. Lancer l'analyse depuis l'interface.
-11. Copier le tableau C++ généré dans `ball-sorter/classification.cpp`.
+11. Copier le bloc généré dans `ball-sorter/classification.h`.
 12. Recompiler et téléverser le firmware `ball-sorter` sur la Seeeduino Nano.
 13. Tester le tri avec un jeu de balles réel.
 
@@ -801,7 +801,7 @@ Vérifier :
 - la qualité de l'éclairage ;
 - la propreté du capteur AS7341 ;
 - les retours NeoPixel ;
-- la présence des derniers centroïdes dans `ball-sorter/classification.cpp` ;
+- la présence des derniers centroïdes dans `ball-sorter/classification.h` ;
 - la nécessité de refaire une calibration.
 
 ---

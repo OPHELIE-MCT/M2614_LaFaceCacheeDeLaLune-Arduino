@@ -143,12 +143,12 @@ Conséquence opérationnelle :
 
 - persistance : `data/analysis/last_centroid_analysis.json`
 - artefacts visuels : `static/generated/analysis/`
-- sortie exploitable : tableau C++ et seuil inconnu pour `ball-sorter`
+- sortie exploitable : tableau C++ avec rayon interne global et rayons externes par classe pour `ball-sorter`
 
 ### 3. Données embarquées trieur
 
-- localisation : `ball-sorter/classification.cpp`
-- contenu : centroïdes et paramètres de décision
+- localisation : `ball-sorter/classification.h`
+- contenu : centroïdes, noms de classes et paramètres de décision entraînés
 - mise à jour : manuelle après validation du recalibrage
 
 ## Invariants d'architecture
@@ -169,7 +169,7 @@ Ces règles ne doivent pas être cassées lors des évolutions :
 - pilotes MCU : `driver/`
 - LiDAR : `LiDAR/`
 - service SBC : `M2614_LaFaceCacheeDeLaLune-Python/app/`
-- classifieur trieur : `ball-sorter/classification.h` et `ball-sorter/classification.cpp`
+- classifieur trieur : `ball-sorter/classification.h` pour les constantes entraînées et `ball-sorter/classification.cpp` pour les algorithmes de prédiction
 
 ## Risques opérationnels à surveiller
 

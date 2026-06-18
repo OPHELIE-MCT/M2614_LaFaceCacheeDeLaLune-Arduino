@@ -61,7 +61,7 @@ Le recalibrage se fait maintenant depuis le sketch principal et l'interface web 
 4. le MCU envoie les 10 canaux projetes avec `Bridge.notify("color_sensor.sample", ...)`
 5. l'application Python ecrit les lignes dans `data/color_sensor_samples.csv` au format `color_name,channel1..channel10`
 6. depuis la meme interface web, l'operateur peut reinitialiser le CSV, le telecharger, lancer l'analyse des centroïdes, et declencher `arduino-reset`
-7. le service Python sauvegarde localement les graphiques, puis affiche le tableau C final et le seuil `kUnknownThreshold` a recopier dans le classifieur du trieur
+7. le service Python sauvegarde localement les graphiques, puis affiche le bloc final avec le rayon interne global et les rayons externes par classe a recopier dans `ball-sorter/classification.h`
 8. si le capteur n'est pas detecte au boot, l'Uno Q continue son comportement robot habituel et l'interface affiche explicitement que le capteur est debranche
 
 ## Outils et compilation
@@ -115,7 +115,7 @@ La derniere analyse reussie est persistee dans `data/analysis/last_centroid_anal
 
 - un bouton "Centroid analysis" desactive et affichant "Analyzing..." avec un spinner pendant l'execution
 - le resultat C++ avec un bouton "Copy to clipboard" pour faciliter le copier-coller dans le classifieur
-- les metriques d'analyse (nombre d'echantillons, score silhouette, seuil inconnu)
+- les metriques d'analyse (nombre d'echantillons, score silhouette, rayon interne et rayons externes par classe)
 - les graphiques generes sous forme de liens cliquables
 
 ## Regles de travail
