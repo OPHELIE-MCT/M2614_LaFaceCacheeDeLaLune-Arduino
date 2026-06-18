@@ -139,30 +139,34 @@ Le robot possède trois états principaux :
 - **mode automatique** : navigation autonome selon la machine d'état du firmware ;
 - **connexion perdue** : arrêt ou bascule contrôlée selon la configuration.
 
-En mode manuel, les canaux principaux de la télécommande commandent le déplacement, la translation latérale et la rotation. Le canal F permet de basculer l'état du trieur.
+#### Contrôles en mode manuel
 
-Le passage en mode automatique se fait par la combinaison **E + F**.
+La télécommande utilise deux joysticks et leurs boutons poussoirs :
+
+- **Joystick gauche** : déplacement dans le plan (avant/arrière + gauche/droite).
+- **Joystick droit, axe latéral uniquement** : rotation sur soi-même (gauche/droite). L'axe longitudinal du joystick droit n'est pas utilisé.
+- **Bouton du joystick droit** (appui puis relâche) : bascule l'état du trieur de balles (activation/désactivation).
+- **Les deux boutons de joystick enfoncés ensemble** : activation manuelle du mode autonome.
+
+La bascule du trieur se fait sur flanc descendant du bouton : appuyer puis relâcher le bouton du joystick droit inverse l'état du trieur. Le trieur est automatiquement désactivé tant que les deux boutons de joystick sont enfoncés ensemble ou pendant le mode automatique.
+
+Le passage en mode automatique se fait par la combinaison des deux boutons de joystick.
 
 ---
 
 ## Activer ou désactiver le mode autonome
 
-Le comportement autonome peut être désactivé à l'exécution, sans recompilation, depuis l'interface web ou directement via RouterBridge. C'est utile quand le robot doit être utilisé dans un autre contexte ou sur un autre circuit.
+Le comportement autonome peut être désactivé à l'exécutionw sans recompilationw depuis l'interface web. C'est utile quand le robot doit être utilisé dans un autre contexte ou sur un autre circuit.
 
 ### Bascule via l'interface web
 
-L'interface de calibration expose un interrupteur « Autonomous mode » dans la section « Robot control ». Le basculer appelle la route `POST /api/robot/autonomous` sur le service Python, qui relaie l'état au MCU via RouterBridge. L'état affiché est rafraîchi toutes les secondes depuis `GET /api/gather/status`.
-
-### Contrat RouterBridge
-
-Le MCU expose deux méthodes RouterBridge pour piloter le drapeau d'autonomie à l'exécution :
-
-- `robot.autonomous.enabled` (getter) : retourne `1` si la bascule autonome est active, `0` sinon.
-- `robot.autonomous.set_enabled` (setter) : prend un entier non nul pour activer, `0` pour désactiver. Retourne `true` quand la valeur est appliquée.
+L'interface de calibration expose un interrupteur « Autonomous mode » dans la section « Robot control ».
 
 Avec la bascule **activée**, si le signal RC de conduite est perdu pendant suffisamment longtemps, le robot peut passer en contrôle automatique selon la logique prévue dans le firmware.
 
 Avec la bascule **désactivée**, si le signal RC est perdu, le robot passe en état de connexion perdue et s'arrête au lieu de lancer le comportement autonome.
+
+Veuillez noter que la télécommande doit être allumée afin que ce paramètre prennet effet immédiatement. La logique d'activation du mode autonome s'effectue à la mise à jour du signal de la télécommande.
 
 ### Valeur par défaut au démarrage
 
@@ -752,7 +756,7 @@ Solution :
 
 ### Le mode automatique s'active alors qu'il ne devrait pas
 
-Désactiver la bascule autonome depuis l'interface web (section « Robot control »), ou appeler `robot.autonomous.set_enabled(0)` via RouterBridge.
+Allumer la télécommande, puis désactiver la bascule autonome depuis l'interface web (section « Robot control »).
 
 Pour changer la valeur par défaut au démarrage, modifier dans `M2614_LaFaceCacheeDeLaLune.ino` :
 
@@ -788,7 +792,7 @@ Vérifier :
 - le firmware `ball-sorter` ;
 - l'entrée d'arrêt d'urgence ;
 - la ligne `ENABLE_SORTER` ;
-- le comportement du canal F en mode manuel.
+- le comportement du bouton du joystick droit en mode manuel (appui puis relâche pour basculer le trieur).
 
 ### Les balles sont mal triées
 
@@ -824,9 +828,7 @@ Pour changer le réseau WiFi :
 Pour désactiver le mode autonome :
 
 1. utiliser l'interrupteur « Autonomous mode » de l'interface web, ou appeler `POST /api/robot/autonomous` avec `{"enabled": false}` ;
-2. si le robot n'est pas connecté au service Python, appeler `robot.autonomous.set_enabled(0)` via RouterBridge ;
-3. pour un défaut au démarrage, modifier `autonomousModeEnabled` dans `M2614_LaFaceCacheeDeLaLune.ino`, mettre la valeur à `false`, puis recompiler et téléverser.
-4. téléverser sur l'Uno Q.
+2. pour changer la valeur par défaut au démarrage, modifier `autonomousModeEnabled` dans `M2614_LaFaceCacheeDeLaLune.ino`, puis recompiler et téléverser.
 
 Pour recalibrer les couleurs :
 

@@ -27,9 +27,11 @@ Si le capteur couleur de calibration n'est pas détecté au démarrage, le robot
 
 Le détail exact des canaux est documenté dans l'API de `RemoteController`, mais le comportement attendu est :
 
-- A à D : commande de déplacement et rotation
-- E : participation au changement de mode
-- F : commande du trieur en mode manuel
+- A (joystick gauche) : déplacement longitudinal avant/arrière
+- B (joystick gauche) : déplacement latéral gauche/droite
+- D (joystick droit, axe latéral) : rotation sur soi-même
+- E (bouton joystick gauche) : participation au changement de mode
+- F (bouton joystick droit) : commande du trieur en mode manuel
 - G et H : trims auxiliaires
 
 ## Mode manuel
@@ -40,11 +42,18 @@ Le mode manuel est utilisé pour :
 - vérifier le comportement du train mécanum
 - commander le trieur de façon simple
 
-Dans ce mode, le bouton F agit comme un basculement de l'état du trieur sur flanc descendant.
+Contrôles en mode manuel :
+
+- **Joystick gauche** : déplacement dans le plan (avant/arrière + gauche/droite).
+- **Joystick droit, axe latéral uniquement** : rotation sur soi-même (gauche/droite). L'axe longitudinal du joystick droit n'est pas utilisé.
+- **Bouton du joystick droit** (appui puis relâche) : bascule l'état du trieur de balles (activation/désactivation). La bascule se fait sur flanc descendant du bouton.
+- **Les deux boutons de joystick enfoncés ensemble** : activation manuelle du mode autonome.
+
+Le trieur est automatiquement désactivé tant que les deux boutons de joystick sont enfoncés ensemble ou pendant le mode automatique.
 
 ## Mode automatique
 
-Le passage en mode automatique se fait par la combinaison `E + F`. Lors de ce passage :
+Le passage en mode automatique se fait en enfonçant simultanément les deux boutons de joystick. Lors de ce passage :
 
 - l'Uno Q désactive le trieur
 - la machine d'état automatique reprend la main
@@ -78,11 +87,12 @@ Le tri proprement dit est réalisé par le dépôt `ball-sorter`, qui gère :
 
 ### Le mode automatique ne s'active pas
 
+- vérifier que les deux boutons de joystick sont bien enfoncés simultanément
 - vérifier l'état des canaux E et F
 - vérifier la logique d'entrée RC dans les diagnostics disponibles
 
 ### Le trieur semble inactif
 
-- vérifier l'action du canal F en mode manuel
+- vérifier l'action du bouton du joystick droit en mode manuel (appui puis relâche)
 - vérifier le firmware `ball-sorter`
 - vérifier le câblage de `ENABLE_SORTER`

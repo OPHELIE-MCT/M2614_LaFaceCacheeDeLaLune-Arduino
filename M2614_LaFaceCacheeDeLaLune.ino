@@ -14,7 +14,7 @@
 // Defaults to true. Can be toggled at runtime through the RouterBridge RPC methods
 // robot.autonomous.enabled (getter) and robot.autonomous.set_enabled (setter).
 // Set this to false to disable the autonomous behavior (e.g. on another circuit).
-bool autonomousModeEnabled = true;
+bool autonomousModeEnabled = false;
 
 MotorPinConfig frontLeftPins = {FL_IN1, FL_IN2, FL_EN};
 MotorPinConfig frontRightPins = {FR_IN1, FR_IN2, FR_EN};
