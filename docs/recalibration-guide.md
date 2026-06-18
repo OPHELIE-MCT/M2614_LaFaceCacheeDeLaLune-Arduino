@@ -63,7 +63,8 @@ Une fois le CSV complet, lancer l'analyse depuis l'interface. Le service Python 
 
 ## Réinjection dans le trieur
 
-Le bloc C++ documenté produit par l'analyse doit être reporté dans `ball-sorter/classification.h`. Ensuite :
+Le bloc C++ documenté produit par l'analyse doit être reporté dans `ball-sorter/config.h`.
+Ce fichier est dédié aux constantes générées : il peut être vidé puis remplacé par un simple copier-coller du nouveau bloc. Ensuite :
 
 1. recompiler `ball-sorter`
 2. téléverser le firmware sur la Seeeduino Nano
@@ -96,4 +97,4 @@ Après mise à jour du trieur, vérifier :
 
 - vérifier la qualité des échantillons d'origine
 - vérifier les conditions d'éclairage
-- vérifier que le bon bloc de constantes a été copié dans `classification.h`
+- vérifier que le bon bloc de constantes a été copié dans `config.h`

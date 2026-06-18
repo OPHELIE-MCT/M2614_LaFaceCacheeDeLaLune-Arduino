@@ -16,7 +16,7 @@ Le code actif est maintenant reparti dans plusieurs depots sous `C:\Users\david\
 | --- | --- | --- |
 | Capture couleur Uno Q + RouterBridge | `M2614_LaFaceCacheeDeLaLune/color-data-gather/` | sketch autonome Uno Q qui lit l'AS7341 sur `Wire1` et envoie les echantillons via `Bridge.notify(...)` |
 | Application SBC pour la capture | `M2614_LaFaceCacheeDeLaLune-Python/` | app FastAPI qui demarre la collecte, recoit `color_sensor.sample`, et ecrit le CSV |
-| Tri des balles et mapping des 10 features | `ball-sorter/ball-sorter.ino` et `ball-sorter/classification.h` | source de verite pour l'ordre des canaux projetes et la liste des couleurs |
+| Tri des balles et mapping des 10 features | `ball-sorter/ball-sorter.ino` et `ball-sorter/config.h` | source de vérité pour l'ordre des canaux projetés, la liste des couleurs et les constantes générées |
 | Notebook de recalibrage | `ball-analyzer/analysis.ipynb` | charge le CSV labellise et imprime le tableau C final |
 | Telecommande RC | `Tests/RC_Reciever/RC-Controller/` | lecture des canaux, normalisation et mapping operateur |
 | Pilotage mecanum | `Tests/RC_Reciever/Mecanum-Controller/` et `Tests/MechanumTest/` | logique de conduite et securites moteur |
@@ -58,10 +58,10 @@ Le recalibrage se fait maintenant depuis le sketch principal et l'interface web 
 1. au boot du sketch principal, l'Uno Q tente d'initialiser l'AS7341 sur `Wire1`
 2. si le capteur est detecte, le MCU bascule en mode calibration uniquement
 3. le SBC appelle `color_sensor.capture.start` via RouterBridge
-4. le MCU envoie les 10 canaux projetes avec `Bridge.notify("color_sensor.sample", ...)`
+4. le MCU envoie les 10 canaux projetés avec `Bridge.notify("color_sensor.sample", ...)`
 5. l'application Python ecrit les lignes dans `data/color_sensor_samples.csv` au format `color_name,channel1..channel10`
 6. depuis la meme interface web, l'operateur peut reinitialiser le CSV, le telecharger, lancer l'analyse des centroïdes, et declencher `arduino-reset`
-7. le service Python sauvegarde localement les graphiques, puis affiche le bloc final avec le rayon interne global et les rayons externes par classe a recopier dans `ball-sorter/classification.h`
+7. le service Python sauvegarde localement les graphiques, puis affiche le bloc final avec le rayon interne global et les rayons externes par classe a recopier dans `ball-sorter/config.h` (fichier dédié, pensé pour être vidé puis remplacé par copier-coller)
 8. si le capteur n'est pas detecte au boot, l'Uno Q continue son comportement robot habituel et l'interface affiche explicitement que le capteur est debranche
 
 ## Outils et compilation
@@ -106,7 +106,7 @@ L'interface expose maintenant aussi :
 
 - `POST /api/gather/csv/reset` — reinitialise le CSV avec confirmation de l'operateur
 - `GET /api/gather/csv/download` — telecharge le CSV actuel
-- `POST /api/gather/analysis/run` — lance le calcul des centroides cote SBC et sauvegarde les resultats
+- `POST /api/gather/analysis/run` — lance le calcul des centroïdes côté SBC et sauvegarde les résultats
 - `POST /api/gather/device/reset` — execute `arduino-reset` pour reinitialiser le MCU
 
 Les graphiques d'analyse sont sauvegardes sous `static/generated/analysis/` et servis comme fichiers statiques consultables via des liens dans l'interface.

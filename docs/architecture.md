@@ -147,7 +147,7 @@ Conséquence opérationnelle :
 
 ### 3. Données embarquées trieur
 
-- localisation : `ball-sorter/classification.h`
+- localisation : `ball-sorter/config.h`
 - contenu : centroïdes, noms de classes et paramètres de décision entraînés
 - mise à jour : manuelle après validation du recalibrage
 
@@ -169,7 +169,7 @@ Ces règles ne doivent pas être cassées lors des évolutions :
 - pilotes MCU : `driver/`
 - LiDAR : `LiDAR/`
 - service SBC : `M2614_LaFaceCacheeDeLaLune-Python/app/`
-- classifieur trieur : `ball-sorter/classification.h` pour les constantes entraînées et `ball-sorter/classification.cpp` pour les algorithmes de prédiction
+- classifieur trieur : `ball-sorter/config.h` pour les constantes entraînées et `ball-sorter/classification.cpp` pour les algorithmes de prédiction
 
 ## Risques opérationnels à surveiller
 
