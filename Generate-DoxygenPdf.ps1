@@ -72,6 +72,14 @@ if (-not (Test-Path -LiteralPath $latexDir)) {
     throw "LaTeX output folder not found: $latexDir"
 }
 
+$robotImageSource = Join-Path $imagesDir "robot.png"
+if (-not (Test-Path -LiteralPath $robotImageSource)) {
+    throw "Robot image not found: $robotImageSource"
+}
+
+$robotImageDestination = Join-Path $latexDir "robot.png"
+Copy-Item -LiteralPath $robotImageSource -Destination $robotImageDestination -Force
+
 $refmanTexPath = Join-Path $latexDir "refman.tex"
 if (-not (Test-Path -LiteralPath $refmanTexPath)) {
     throw "LaTeX main file not found: $refmanTexPath"
@@ -94,6 +102,24 @@ if (-not $refmanTex.Contains($authorBanner)) {
 $refmanTex = $refmanTex.Replace($ProjectName, $latexProjectName)
 $refmanTex = $refmanTex.Replace($versionBanner, "06.2026")
 $refmanTex = $refmanTex.Replace($authorBanner, $latexAuthorName)
+
+$titlePageBlock = @'
+    {\large 06.2026}\\
+    \vspace*{0.5cm}
+    \begin{DoxyImage}%
+    \includegraphics[width=\textwidth,height=\textheight/2,keepaspectratio=true]{robot.png}%
+    \end{DoxyImage}
+'@
+
+$titlePagePattern = @'
+(?ms)^  \{\\large 06\.2026\}\\\\\r?\n  \\end\{center\}
+'@
+
+if (-not [regex]::IsMatch($refmanTex, $titlePagePattern)) {
+        throw "Expected title page date block not found in refman.tex."
+}
+
+$refmanTex = [regex]::Replace($refmanTex, $titlePagePattern, $titlePageBlock + "  \end{center}", 1)
 
 $indexBlockPattern = @'
 (?ms)^\s*% Index\r?\n\s*\\backmatter\r?\n\s*\\newpage\r?\n\s*\\phantomsection\r?\n\s*\\clearemptydoublepage\r?\n\s*\\addcontentsline\{toc\}\{chapter\}\{\\indexname\}\r?\n\s*\\printindex\r?\n?
