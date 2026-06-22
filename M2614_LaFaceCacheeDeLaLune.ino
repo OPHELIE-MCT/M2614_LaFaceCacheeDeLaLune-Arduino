@@ -471,7 +471,8 @@ DriveCommands handleAutoReposition(const SensorSnapshot& sensors, uint32_t nowMs
         repositionStartMs = 0U;
         Monitor.println("[DEBUG] Transitioning to SLOW_FORWARD_2: Completed repositioning maneuver");
     }
-    return {50, 325, -30};
+    // return {50, 325, -30};
+    return {35, 225, -30};
 }
 
 DriveCommands handleAutoSlowForward2(const SensorSnapshot& sensors, uint32_t nowMs) {
